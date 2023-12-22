@@ -18,7 +18,7 @@ Remove tracking params from URLs.
 i need to think about it. \
 Maybe add shortcut action, so it can be painlessly run from home screen like here:
 
-https://github.com/makindotcc/UrlDebloater/assets/9150636/0ae8dc5a-4f87-4375-865c-5198a3a44fe1
+https://github.com/makindotcc/UrlDebloater/assets/9150636/7e7de474-ffe9-49a2-ac8c-f75f6006fd34
 
 ## Android
 ### Todo
