@@ -8,6 +8,8 @@ Remove tracking params from URLs.
 - unshorten tiktok per user links (https://vm.tiktok.com/PerUserGeneratedPath) to "anonymous" links (https://tiktok.com/@user/video/852438128934291)
 
 ### Todo
+- installer
+- optional [ClearURLs](https://docs.clearurls.xyz/) database support
 - gui configuration
 - tray icon with helpful shortcuts
 
