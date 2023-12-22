@@ -16,6 +16,10 @@ Remove tracking params from URLs.
 - tray icon with helpful shortcuts
 - ❓ unshorten tiktok links via proxy (socks/http or rest api of url-debloater (self-hosted or mine public instance)) ❓
 
+### Showcase
+
+https://github.com/makindotcc/UrlDebloater/assets/9150636/12d83dd8-9c60-4ada-94be-11afbf2ba260
+
 ## iOS
 ### Todo
 i need to think about it. \
