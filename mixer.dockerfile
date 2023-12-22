@@ -26,7 +26,7 @@ RUN touch mixer/src/main.rs
 RUN cargo build --release
 
 FROM debian:bullseye AS runtime
-RUN apt-get update && apt install -y tini
+RUN apt-get update && apt install -y tini ca-certificates
 WORKDIR /mixer
 COPY --from=builder /urldebloater/target/release/urldebloater-mixer /usr/local/bin
 
