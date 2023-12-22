@@ -2,7 +2,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use tracing::error;
 
 pub type AppResult<T> = core::result::Result<T, AppError>;
 
@@ -21,7 +20,9 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         match self {
             AppError::User(UserError::InvalidUrl) => (StatusCode::BAD_REQUEST, "invalid url"),
-            AppError::Internal(err) => (StatusCode::INTERNAL_SERVER_ERROR, "internal server error"),
+            AppError::Internal(_err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+            }
         }
         .into_response()
     }

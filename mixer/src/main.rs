@@ -15,7 +15,7 @@ use tower::ServiceBuilder;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorError, GovernorLayer};
 use tower_http::trace::TraceLayer;
 use tower_http::ServiceBuilderExt;
-use tracing::error;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use urlwasher::UrlWasher;
@@ -34,6 +34,7 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:7777")
         .await
         .expect("Could not bind tcp listener");
+    info!("Starting listening...");
     axum::serve(
         listener,
         app(true).into_make_service_with_connect_info::<SocketAddr>(),
