@@ -5,7 +5,8 @@ Remove tracking params from URLs.
 
 ### Features
 - automatically extract links from clipboard and remove tracking parameters.
-- unshorten tiktok per user links (https://vm.tiktok.com/PerUserGeneratedPath) to "anonymous" links (https://tiktok.com/@user/video/852438128934291)
+- unshorten tiktok per user links (https://vm.tiktok.com/PerUserGeneratedPath) to "anonymous" links (https://tiktok.com/@user/video/852438128934291) \
+⚠️ it sends request to tiktok in background to achieve this (can still be correlated with your IP address, see todo) ⚠️
 
 ### Todo
 - installer
@@ -13,6 +14,7 @@ Remove tracking params from URLs.
 - optional [ClearURLs](https://docs.clearurls.xyz/) database support
 - gui configuration
 - tray icon with helpful shortcuts
+- ❓ unshorten tiktok links via proxy (socks/http or rest api of url-debloater (self-hosted or mine public instance)) ❓
 
 ## iOS
 ### Todo
