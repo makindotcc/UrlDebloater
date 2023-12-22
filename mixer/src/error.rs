@@ -15,12 +15,14 @@ pub enum AppError {
 #[derive(Debug)]
 pub enum UserError {
     InvalidUrl,
+    TooLongUrl,
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         match self {
             AppError::User(UserError::InvalidUrl) => (StatusCode::BAD_REQUEST, "invalid url"),
+            AppError::User(UserError::TooLongUrl) => (StatusCode::BAD_REQUEST, "too long url"),
             AppError::Internal(err) => {
                 error!("Internal server error: {err:?}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")

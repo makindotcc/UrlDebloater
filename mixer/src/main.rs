@@ -80,6 +80,11 @@ async fn wash(
     State(washer): State<Arc<UrlWasher>>,
     Query(query): Query<WashQuery>,
 ) -> AppResult<String> {
+    const MAX_URL_LENGTH: usize = 1024;
+    if query.url.len() > MAX_URL_LENGTH {
+        return Err(UserError::TooLongUrl.into());
+    }
+
     let url = Url::parse(&query.url).map_err(|_| UserError::InvalidUrl)?;
     let washed = washer.wash(&url).await.context("wash url")?;
     Ok(washed.unwrap_or(url).to_string())
