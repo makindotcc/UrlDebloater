@@ -9,6 +9,7 @@ Remove tracking params from URLs.
 
 ### Todo
 - installer
+- act as default http url scheme handler, so opened link from non-browser program will be proxied through debloater before opening it in browser of your choice.
 - optional [ClearURLs](https://docs.clearurls.xyz/) database support
 - gui configuration
 - tray icon with helpful shortcuts
