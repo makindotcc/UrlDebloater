@@ -54,9 +54,13 @@ mod tests {
     use super::TextWasher;
 
     #[tokio::test]
-    pub async fn test() {
+    pub async fn properly_removes_tracking() {
         let text_washer = TextWasher::default();
-        let cleaned = text_washer.wash("text").await;
-        assert_eq!("", cleaned);
+        let cleaned = text_washer.wash("lorem ipsum https://music.youtube.com/watch?v=IeojlW7SwlQ&si=TRACKING1 lorem https://music.youtube.com/watch?v=CC5ca6Hsb2Q&si=TRACKING2
+        https://music.youtube.com/watch?v=OCAuoCSWIOQ&si=TRACKING3
+        ipsum").await;
+        assert_eq!("lorem ipsum https://music.youtube.com/watch?v=IeojlW7SwlQ lorem https://music.youtube.com/watch?v=CC5ca6Hsb2Q
+        https://music.youtube.com/watch?v=OCAuoCSWIOQ
+        ipsum", cleaned);
     }
 }
