@@ -1,18 +1,23 @@
-use std::ops::Deref;
+use std::{ops::Deref, num::NonZeroUsize};
 
 use anyhow::Context;
+use lru::LruCache;
 use reqwest::redirect::Policy;
+use tokio::sync::Mutex;
+use tracing::debug;
 use url::Url;
 
 pub mod text_washer;
 
 pub struct UrlWasher {
+    cache: Mutex<LruCache<Url, Url>>,
     http_client: reqwest::Client,
 }
 
 impl Default for UrlWasher {
     fn default() -> Self {
         Self {
+            cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())), 
             http_client: reqwest::Client::builder()
                 .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .redirect(Policy::none())
@@ -27,11 +32,15 @@ impl UrlWasher {
         if url.scheme() != "http" && url.scheme() != "https" {
             return Ok(None);
         }
+        if let Some(cached) = self.cache.lock().await.get(&url) {
+            debug!("Serving washed url {} from cache.", url.to_string());
+            return Ok(Some(cached.to_owned()));
+        }
         let domain = match url.domain() {
             Some(domain) => domain,
             None => return Ok(None),
         };
-        match domain {
+        let cleaned = match domain {
             "youtu.be" => Ok(Some(Self::remove_query_params(url, &["si"]))),
             "youtube.com" | "www.youtube.com" | "music.youtube.com" if url.path() == "/watch" => {
                 Ok(Some(Self::remove_query_params(url, &["si"])))
@@ -51,7 +60,11 @@ impl UrlWasher {
                     Some(resolved)
                 }),
             _ => return Ok(None),
+        };
+        if let Ok(Some(cleaned)) = &cleaned {
+            self.cache.lock().await.put(url.to_owned(), cleaned.to_owned());
         }
+        cleaned
     }
 
     fn remove_query_params(url: &Url, params: &[&str]) -> Url {
