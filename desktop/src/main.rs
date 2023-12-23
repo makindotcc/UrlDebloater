@@ -1,5 +1,6 @@
 use anyhow::Context;
-use tracing::{debug, error};
+use iced::{widget::text, Application, Command, Theme, Settings};
+use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 use urlwasher::text_washer::TextWasher;
 
@@ -16,6 +17,8 @@ async fn main() -> anyhow::Result<()> {
         .with_file(false)
         .init();
     debug!("Hello, world!");
+
+    Debloater::run(Settings::default()).unwrap();
 
     let mut arboard = arboard::Clipboard::new().context("Could not create clipboard accessor")?;
     let mut clipboard_poller = ClipboardPoller::new();
@@ -37,5 +40,33 @@ async fn main() -> anyhow::Result<()> {
                 error!("Could not copy cleaned text to clipboard: {err:?}");
             }
         }
+    }
+}
+
+struct Debloater {}
+
+#[derive(Debug, Clone)]
+enum Message {}
+
+impl Application for Debloater {
+    type Message = Message;
+    type Theme = Theme;
+    type Executor = iced::executor::Default;
+    type Flags = ();
+
+    fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        (Debloater {}, Command::none())
+    }
+
+    fn title(&self) -> String {
+        String::from("UrlDebloater")
+    }
+
+    fn update(&mut self, message: Self::Message) -> iced::Command<Self::Message> {
+        Command::none()
+    }
+
+    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+        text("dasdsa").into()
     }
 }
