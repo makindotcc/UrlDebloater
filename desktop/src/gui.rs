@@ -1,13 +1,11 @@
-use std::time::Duration;
-
 use eframe::egui;
 use tray_icon::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem},
-    TrayIcon, TrayIconBuilder, TrayIconEvent,
+    TrayIcon, TrayIconBuilder,
 };
 
 pub struct MyApp {
-    tray_menu: TrayMenu,
+    hide: bool,
     name: String,
     age: u32,
 }
@@ -15,25 +13,22 @@ pub struct MyApp {
 impl Default for MyApp {
     fn default() -> Self {
         Self {
-            tray_menu: TrayMenu::new(),
             name: "Arthur".to_owned(),
             age: 42,
+            hide: true,
         }
     }
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        println!("updating eframe");
-        if let Ok(event) = TrayIconEvent::receiver().try_recv() {
-            println!("tray event: {event:?} {}", event.id.0);
-            if event.id.0 == self.tray_menu.open_config.id().0 {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-            }
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if self.hide {
+            self.hide = false;
+            frame.set_visible(false);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("UrlDebloater configuration");
+            ui.heading("UrlDebloater");
             ui.horizontal(|ui| {
                 let name_label = ui.label("Your name: ");
                 ui.text_edit_singleline(&mut self.name)
@@ -42,11 +37,14 @@ impl eframe::App for MyApp {
             ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
             if ui.button("Click each year").clicked() {
                 self.age += 1;
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::Visible(false));
             }
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
         });
+    }
+
+    fn on_close_event(&mut self) -> bool {
+        self.hide = true;
+        false
     }
 }
 
