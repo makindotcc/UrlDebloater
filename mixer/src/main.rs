@@ -12,6 +12,7 @@ use axum_macros::debug_handler;
 use error::{AppResult, UserError};
 use serde::Deserialize;
 use tower::ServiceBuilder;
+use tower_governor::key_extractor::SmartIpKeyExtractor;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorError, GovernorLayer};
 use tower_http::trace::TraceLayer;
 use tower_http::ServiceBuilderExt;
@@ -58,6 +59,7 @@ fn app(rate_limit: bool) -> Router {
                             GovernorConfigBuilder::default()
                                 .per_second(5)
                                 .burst_size(10)
+                                .key_extractor(SmartIpKeyExtractor)
                                 .finish()
                                 .unwrap(),
                         )),
