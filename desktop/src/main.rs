@@ -62,7 +62,7 @@ fn run_eventloop() -> ! {
     let menu_receiver = MenuEvent::receiver();
 
     let mut detached_app = eframe::run_detached_native(
-        "My egui App",
+        "UrlDebloater",
         &event_loop,
         eframe::NativeOptions {
             initial_window_size: Some(egui::vec2(320.0, 240.0)),
