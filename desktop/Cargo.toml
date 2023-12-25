@@ -15,3 +15,4 @@ tray-icon = "0.11.1"
 image = "0.24"
 winit = "0.28"
 eframe = { git = "https://github.com/rockisch/egui", branch = "run-detached" }
+url = "2.5"

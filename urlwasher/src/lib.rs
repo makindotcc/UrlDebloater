@@ -1,28 +1,36 @@
-use std::{ops::Deref, num::NonZeroUsize};
+use std::{fmt::Display, num::NonZeroUsize, ops::Deref, sync::RwLock};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use lru::LruCache;
 use reqwest::redirect::Policy;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::debug;
 use url::Url;
 
 pub mod text_washer;
 
+pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
+
 pub struct UrlWasher {
     cache: Mutex<LruCache<Url, Url>>,
     http_client: reqwest::Client,
+    config: RwLock<UrlWasherConfig>,
 }
 
 impl Default for UrlWasher {
     fn default() -> Self {
         Self {
-            cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())), 
+            cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())),
             http_client: reqwest::Client::builder()
                 .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .redirect(Policy::none())
                 .build()
                 .unwrap(),
+            config: RwLock::new(UrlWasherConfig {
+                mixer_instance: Some(Url::parse(PUBLIC_MIXER_INSTANCE).unwrap()),
+                tiktok_policy: RedirectWashPolicy::Ignore,
+            }),
         }
     }
 }
@@ -40,59 +48,138 @@ impl UrlWasher {
             Some(domain) => domain,
             None => return Ok(None),
         };
+        let config = self.config();
         let cleaned = match domain {
-            "youtu.be" => Ok(Some(Self::remove_query_params(url, &["si"]))),
+            "youtu.be" => Ok(Some(remove_query_params(url, &["si"]))),
             "youtube.com" | "www.youtube.com" | "music.youtube.com" if url.path() == "/watch" => {
-                Ok(Some(Self::remove_query_params(url, &["si"])))
+                Ok(Some(remove_query_params(url, &["si"])))
             }
             "twitter.com" | "x.com"
                 if url
                     .path_segments()
                     .is_some_and(|segments| matches!(segments.skip(1).next(), Some("status"))) =>
             {
-                Ok(Some(Self::remove_query_params(url, &["s", "t"])))
+                Ok(Some(remove_query_params(url, &["s", "t"])))
             }
-            "vm.tiktok.com" => self
-                .resolve_redirect(url.to_owned())
-                .await
-                .map(|mut resolved| {
-                    resolved.set_query(None);
-                    Some(resolved)
-                }),
+            "vm.tiktok.com" => resolve_redirect(
+                &self.http_client,
+                url.to_owned(),
+                &config,
+                config.tiktok_policy,
+            )
+            .await
+            .map(|url_maybe| {
+                url_maybe.map(|mut url| {
+                    url.set_query(None);
+                    url
+                })
+            }),
             _ => return Ok(None),
         };
         if let Ok(Some(cleaned)) = &cleaned {
-            self.cache.lock().await.put(url.to_owned(), cleaned.to_owned());
+            self.cache
+                .lock()
+                .await
+                .put(url.to_owned(), cleaned.to_owned());
         }
         cleaned
     }
 
-    fn remove_query_params(url: &Url, params: &[&str]) -> Url {
-        let mut debloated_url = url.clone();
-        debloated_url.query_pairs_mut().clear();
-        let debloated_query = url
-            .query_pairs()
-            .filter(|(query_key, _)| !params.contains(&query_key.deref()));
-        for (query_key, query_value) in debloated_query {
-            debloated_url
-                .query_pairs_mut()
-                .append_pair(&query_key, &query_value);
-        }
-        if let Some("") = debloated_url.query() {
-            debloated_url.set_query(None);
-        }
-        debloated_url
+    pub fn config(&self) -> UrlWasherConfig {
+        self.config.read().unwrap().to_owned()
     }
 
-    async fn resolve_redirect(&self, url: Url) -> anyhow::Result<Url> {
-        let resp = self.http_client.get(url).send().await?;
-        let location = resp
-            .headers()
-            .get("location")
-            .context("missing location header")?
-            .to_str()
-            .context("invalid location header")?;
-        Ok(Url::parse(location).context("parse location url")?)
+    pub fn set_config(&self, config: UrlWasherConfig) {
+        *self.config.write().unwrap() = config;
+    }
+}
+
+fn remove_query_params(url: &Url, params: &[&str]) -> Url {
+    let mut debloated_url = url.clone();
+    debloated_url.query_pairs_mut().clear();
+    let debloated_query = url
+        .query_pairs()
+        .filter(|(query_key, _)| !params.contains(&query_key.deref()));
+    for (query_key, query_value) in debloated_query {
+        debloated_url
+            .query_pairs_mut()
+            .append_pair(&query_key, &query_value);
+    }
+    if let Some("") = debloated_url.query() {
+        debloated_url.set_query(None);
+    }
+    debloated_url
+}
+
+async fn resolve_redirect(
+    http_client: &reqwest::Client,
+    url: Url,
+    config: &UrlWasherConfig,
+    policy: RedirectWashPolicy,
+) -> anyhow::Result<Option<Url>> {
+    match policy {
+        RedirectWashPolicy::Ignore => return Ok(None),
+        RedirectWashPolicy::Locally => {
+            let resp = http_client.get(url).send().await?;
+            let location = resp
+                .headers()
+                .get("location")
+                .context("missing location header")?
+                .to_str()
+                .context("invalid location header")?;
+            Url::parse(location).context("parse location url").map(Some)
+        }
+        RedirectWashPolicy::ViaMixer => {
+            let mixer_instance = config
+                .mixer_instance
+                .clone()
+                .context("undefined mixer instance")?;
+            let mut wash_url = mixer_instance.clone();
+            wash_url.set_path("wash");
+            let resp = http_client
+                .get(wash_url)
+                .query(&[("url", url.to_string())])
+                .send()
+                .await
+                .context("send mixer requewst")?;
+            if !resp.status().is_success() {
+                return Err(anyhow!("Invalid mixer response status: {}", resp.status()));
+            }
+            Url::parse(&resp.text().await.context("read mixer response url")?)
+                .context("parse mixer response url")
+                .map(Some)
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UrlWasherConfig {
+    pub mixer_instance: Option<Url>,
+    pub tiktok_policy: RedirectWashPolicy,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum RedirectWashPolicy {
+    /// Do not resolve redirection.
+    Ignore,
+    /// Resolve redirection locally.
+    ///
+    /// Exposes your IP address that can be corellated with you.
+    Locally,
+    /// Resolve redirection using urldebloater-mixer.
+    ///
+    /// Exposes link to person who is running mixer instance you set
+    /// (not so scary for tiktoks tho).
+    ViaMixer,
+}
+
+impl Display for RedirectWashPolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            RedirectWashPolicy::Ignore => "ignore",
+            RedirectWashPolicy::Locally => "locally",
+            RedirectWashPolicy::ViaMixer => "via mixer",
+        })
     }
 }
 
@@ -100,11 +187,14 @@ impl UrlWasher {
 mod tests {
     use url::Url;
 
-    use crate::UrlWasher;
+    use crate::{RedirectWashPolicy, UrlWasher};
 
     #[tokio::test]
     async fn test_cleaning() {
         let washer = UrlWasher::default();
+        let mut config = washer.config();
+        config.tiktok_policy = RedirectWashPolicy::Locally;
+        washer.set_config(config);
 
         let tests = [
             (

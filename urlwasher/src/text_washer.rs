@@ -5,7 +5,7 @@ use crate::UrlWasher;
 
 #[derive(Default)]
 pub struct TextWasher {
-    url_washer: UrlWasher,
+    pub url_washer: UrlWasher,
 }
 
 impl TextWasher {

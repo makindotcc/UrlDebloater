@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Context;
 use eframe::{egui, DetachedResult};
 use tracing::{debug, error};
@@ -8,11 +10,15 @@ use winit::event_loop::ControlFlow;
 
 use crate::{
     clipboard_poller::ClipboardPoller,
-    gui::{MyApp, TrayMenu},
+    gui::{ConfigWindow, TrayMenu},
 };
 
 mod clipboard_poller;
 mod gui;
+
+pub struct AppState {
+    text_washer: TextWasher,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,25 +30,30 @@ async fn main() -> anyhow::Result<()> {
         .init();
     debug!("Hello, world!");
 
-    tokio::spawn(async move {
-        run_clipboard_patcher()
-            .await
-            .expect("Could run clipboard patcher");
+    let app_state = Arc::new(AppState {
+        text_washer: TextWasher::default(),
     });
-    run_eventloop();
+    tokio::spawn({
+        let app_state = Arc::clone(&app_state);
+        async move {
+            run_clipboard_patcher(&app_state)
+                .await
+                .expect("Could run clipboard patcher");
+        }
+    });
+    run_gui(Arc::clone(&app_state));
 }
 
-async fn run_clipboard_patcher() -> anyhow::Result<()> {
+async fn run_clipboard_patcher(app_state: &AppState) -> anyhow::Result<()> {
     let mut arboard = arboard::Clipboard::new().context("Could not create clipboard accessor")?;
     let mut clipboard_poller = ClipboardPoller::new();
-    let text_washer = TextWasher::default();
     loop {
         let dirty_text = clipboard_poller
             .poll(&mut arboard)
             .await
             .context("Could not poll clipboard")?;
         debug!("Detected clipboard change: {dirty_text}");
-        let clean_text = text_washer.wash(dirty_text).await;
+        let clean_text = app_state.text_washer.wash(dirty_text).await;
         if clean_text != dirty_text
             && arboard
                 .get_text()
@@ -56,7 +67,7 @@ async fn run_clipboard_patcher() -> anyhow::Result<()> {
     }
 }
 
-fn run_eventloop() -> ! {
+fn run_gui(app_state: Arc<AppState>) -> ! {
     let event_loop = eframe::EventLoopBuilder::<eframe::UserEvent>::with_user_event().build();
     let tray_menu = TrayMenu::new();
     let menu_receiver = MenuEvent::receiver();
@@ -68,7 +79,7 @@ fn run_eventloop() -> ! {
             initial_window_size: Some(egui::vec2(320.0, 240.0)),
             ..Default::default()
         },
-        Box::new(|_cc| Box::<MyApp>::default()),
+        Box::new(|_cc| Box::new(ConfigWindow::new(app_state))),
     );
     event_loop.run(move |event, event_loop, control_flow| {
         if let Ok(event) = menu_receiver.try_recv() {

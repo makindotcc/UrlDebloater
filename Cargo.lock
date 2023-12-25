@@ -4146,6 +4146,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]
@@ -4161,6 +4162,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tray-icon",
+ "url",
  "urlwasher",
  "winit",
 ]
@@ -4192,6 +4194,7 @@ dependencies = [
  "anyhow",
  "lru",
  "reqwest",
+ "serde",
  "tokio",
  "tracing",
  "url",
