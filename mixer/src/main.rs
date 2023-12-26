@@ -19,7 +19,7 @@ use tower_http::ServiceBuilderExt;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use urlwasher::UrlWasher;
+use urlwasher::{UrlWasher, UrlWasherConfig};
 
 mod error;
 
@@ -45,7 +45,10 @@ async fn main() {
 }
 
 fn app(rate_limit: bool) -> Router {
-    let url_washer = UrlWasher::default();
+    let url_washer = UrlWasher::new(UrlWasherConfig {
+        mixer_instance: None,
+        tiktok_policy: urlwasher::RedirectWashPolicy::Locally,
+    });
     Router::new()
         .route("/wash", get(wash))
         .layer(

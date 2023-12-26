@@ -1,45 +1,126 @@
 use eframe::egui;
+use tokio::sync::watch;
+use tracing::debug;
 use tray_icon::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem},
     TrayIcon, TrayIconBuilder,
 };
+use url::Url;
+use urlwasher::{RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
 
-pub struct MyApp {
+use crate::AppConfig;
+
+pub struct ConfigWindow {
     hide: bool,
-    name: String,
-    age: u32,
+    config_state: UiConfigState,
+    config_changed: watch::Sender<AppConfig>,
 }
 
-impl Default for MyApp {
-    fn default() -> Self {
+#[derive(PartialEq, Eq, Clone)]
+struct UiConfigState {
+    mixer_instance: String,
+    tiktok_policy: RedirectWashPolicy,
+    enable_clipboard_patcher: bool,
+}
+
+impl From<AppConfig> for UiConfigState {
+    fn from(config: AppConfig) -> Self {
         Self {
-            name: "Arthur".to_owned(),
-            age: 42,
-            hide: true,
+            mixer_instance: config
+                .url_washer
+                .mixer_instance
+                .map(|url| url.to_string())
+                .unwrap_or_default(),
+            tiktok_policy: config.url_washer.tiktok_policy,
+            enable_clipboard_patcher: config.enable_clipboard_patcher,
         }
     }
 }
 
-impl eframe::App for MyApp {
+impl Into<AppConfig> for &UiConfigState {
+    fn into(self) -> AppConfig {
+        AppConfig {
+            url_washer: UrlWasherConfig {
+                mixer_instance: Url::parse(&self.mixer_instance).map(Some).unwrap_or(None),
+                tiktok_policy: self.tiktok_policy,
+            },
+            enable_clipboard_patcher: self.enable_clipboard_patcher,
+        }
+    }
+}
+
+impl ConfigWindow {
+    pub fn new(config: AppConfig, config_changed: watch::Sender<AppConfig>) -> Self {
+        Self {
+            hide: false,
+            config_state: UiConfigState {
+                mixer_instance: config
+                    .url_washer
+                    .mixer_instance
+                    .map(|url| url.to_string())
+                    .unwrap_or_default(),
+                tiktok_policy: config.url_washer.tiktok_policy,
+                enable_clipboard_patcher: true,
+            },
+            config_changed,
+        }
+    }
+}
+
+impl eframe::App for ConfigWindow {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if self.hide {
             self.hide = false;
             frame.set_visible(false);
         }
 
+        let previous_config = self.config_state.clone();
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("UrlDebloater");
-            ui.horizontal(|ui| {
-                let name_label = ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name)
-                    .labelled_by(name_label.id);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                self.age += 1;
+            ui.checkbox(&mut self.config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
+
+            ui.separator();
+            {
+                ui.heading("Per user generated links")
+                    .on_hover_text("Section for links that cannot be anonymised without requesting service server.");
+
+                ui.horizontal(|ui| {
+                    let name_label = ui
+                        .label("Mixer instance url: ")
+                        .on_hover_text("To remove tracking capabilities of short links like https://vm.tiktok.com/PerUserId \
+                        we need request target server (in this case - tiktok) to unroll it.\n\
+                        \
+                        You can do this from your local network, but there is a risk that they will catch you by correlating your IP address.\n\
+                        \n\
+                        This option allows you to resolve these links via service hosted on other network.\n\
+                        ⚠ It sends url to third party person if you don't host mixer yourself ⚠ (Not so scary for TikTok videos tho) \
+                        ");
+                    ui.text_edit_singleline(&mut self.config_state.mixer_instance)
+                        .labelled_by(name_label.id);
+                    if ui.button("use public instance").clicked() {
+                        self.config_state.mixer_instance = PUBLIC_MIXER_INSTANCE.to_string();
+                    }
+                });
+                if !self.config_state.mixer_instance.is_empty() {
+                    if let Err(err) = Url::parse(&self.config_state.mixer_instance) {
+                        ui.colored_label(ui.visuals().error_fg_color, format!("Invalid url: {err}"));
+                    }
+                }
+
+                ui.separator();
+                egui::ComboBox::from_label("TikTok")
+                    .selected_text(format!("{}", self.config_state.tiktok_policy))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.config_state.tiktok_policy, RedirectWashPolicy::Ignore, "ignore");
+                        ui.selectable_value(&mut self.config_state.tiktok_policy, RedirectWashPolicy::Locally, "locally");
+                        ui.selectable_value(&mut self.config_state.tiktok_policy, RedirectWashPolicy::ViaMixer, "via mixer");
+                    });
             }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
         });
+
+        if previous_config != self.config_state {
+            debug!("Config changed.");
+            let _ = self.config_changed.send((&self.config_state).into());
+        }
     }
 
     fn on_close_event(&mut self) -> bool {
