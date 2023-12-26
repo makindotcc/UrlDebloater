@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use eframe::egui;
+use tokio::sync::watch;
 use tracing::debug;
 use tray_icon::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem},
@@ -9,33 +8,61 @@ use tray_icon::{
 use url::Url;
 use urlwasher::{RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
 
-use crate::AppState;
+use crate::AppConfig;
 
 pub struct ConfigWindow {
     hide: bool,
-    app_state: Arc<AppState>,
     config_state: UiConfigState,
+    config_changed: watch::Sender<AppConfig>,
 }
 
 #[derive(PartialEq, Eq, Clone)]
 struct UiConfigState {
     mixer_instance: String,
     tiktok_policy: RedirectWashPolicy,
+    enable_clipboard_patcher: bool,
+}
+
+impl From<AppConfig> for UiConfigState {
+    fn from(config: AppConfig) -> Self {
+        Self {
+            mixer_instance: config
+                .url_washer
+                .mixer_instance
+                .map(|url| url.to_string())
+                .unwrap_or_default(),
+            tiktok_policy: config.url_washer.tiktok_policy,
+            enable_clipboard_patcher: config.enable_clipboard_patcher,
+        }
+    }
+}
+
+impl Into<AppConfig> for &UiConfigState {
+    fn into(self) -> AppConfig {
+        AppConfig {
+            url_washer: UrlWasherConfig {
+                mixer_instance: Url::parse(&self.mixer_instance).map(Some).unwrap_or(None),
+                tiktok_policy: self.tiktok_policy,
+            },
+            enable_clipboard_patcher: self.enable_clipboard_patcher,
+        }
+    }
 }
 
 impl ConfigWindow {
-    pub fn new(app_state: Arc<AppState>) -> Self {
-        let washer_config = app_state.text_washer.url_washer.config();
+    pub fn new(config: AppConfig, config_changed: watch::Sender<AppConfig>) -> Self {
         Self {
             hide: false,
-            app_state,
             config_state: UiConfigState {
-                mixer_instance: washer_config
+                mixer_instance: config
+                    .url_washer
                     .mixer_instance
                     .map(|url| url.to_string())
                     .unwrap_or_default(),
-                tiktok_policy: washer_config.tiktok_policy,
+                tiktok_policy: config.url_washer.tiktok_policy,
+                enable_clipboard_patcher: true,
             },
+            config_changed,
         }
     }
 }
@@ -49,6 +76,9 @@ impl eframe::App for ConfigWindow {
 
         let previous_config = self.config_state.clone();
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.checkbox(&mut self.config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
+
+            ui.separator();
             {
                 ui.heading("Per user generated links")
                     .on_hover_text("Section for links that cannot be anonymised without requesting service server.");
@@ -70,8 +100,10 @@ impl eframe::App for ConfigWindow {
                         self.config_state.mixer_instance = PUBLIC_MIXER_INSTANCE.to_string();
                     }
                 });
-                if let Err(err) = Url::parse(&self.config_state.mixer_instance) {
-                    ui.colored_label(ui.visuals().error_fg_color, format!("Invalid url: {err}"));
+                if !self.config_state.mixer_instance.is_empty() {
+                    if let Err(err) = Url::parse(&self.config_state.mixer_instance) {
+                        ui.colored_label(ui.visuals().error_fg_color, format!("Invalid url: {err}"));
+                    }
                 }
 
                 ui.separator();
@@ -87,15 +119,7 @@ impl eframe::App for ConfigWindow {
 
         if previous_config != self.config_state {
             debug!("Config changed.");
-            self.app_state
-                .text_washer
-                .url_washer
-                .set_config(UrlWasherConfig {
-                    mixer_instance: Url::parse(&self.config_state.mixer_instance)
-                        .map(Some)
-                        .unwrap_or_default(),
-                    tiktok_policy: self.config_state.tiktok_policy,
-                });
+            let _ = self.config_changed.send((&self.config_state).into());
         }
     }
 

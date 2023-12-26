@@ -1,4 +1,4 @@
-use std::{fmt::Display, num::NonZeroUsize, ops::Deref, sync::RwLock};
+use std::{fmt::Display, num::NonZeroUsize, ops::Deref};
 
 use anyhow::{anyhow, Context};
 use lru::LruCache;
@@ -15,11 +15,17 @@ pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
 pub struct UrlWasher {
     cache: Mutex<LruCache<Url, Url>>,
     http_client: reqwest::Client,
-    config: RwLock<UrlWasherConfig>,
+    config: UrlWasherConfig,
 }
 
 impl Default for UrlWasher {
     fn default() -> Self {
+        Self::new(UrlWasherConfig::default())
+    }
+}
+
+impl UrlWasher {
+    pub fn new(config: UrlWasherConfig) -> Self {
         Self {
             cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())),
             http_client: reqwest::Client::builder()
@@ -27,15 +33,10 @@ impl Default for UrlWasher {
                 .redirect(Policy::none())
                 .build()
                 .unwrap(),
-            config: RwLock::new(UrlWasherConfig {
-                mixer_instance: Some(Url::parse(PUBLIC_MIXER_INSTANCE).unwrap()),
-                tiktok_policy: RedirectWashPolicy::Ignore,
-            }),
+            config,
         }
     }
-}
 
-impl UrlWasher {
     pub async fn wash(&self, url: &Url) -> anyhow::Result<Option<Url>> {
         if url.scheme() != "http" && url.scheme() != "https" {
             return Ok(None);
@@ -48,7 +49,6 @@ impl UrlWasher {
             Some(domain) => domain,
             None => return Ok(None),
         };
-        let config = self.config();
         let cleaned = match domain {
             "youtu.be" => Ok(Some(remove_query_params(url, &["si"]))),
             "youtube.com" | "www.youtube.com" | "music.youtube.com" if url.path() == "/watch" => {
@@ -64,8 +64,8 @@ impl UrlWasher {
             "vm.tiktok.com" => resolve_redirect(
                 &self.http_client,
                 url.to_owned(),
-                &config,
-                config.tiktok_policy,
+                &self.config,
+                self.config.tiktok_policy,
             )
             .await
             .map(|url_maybe| {
@@ -83,14 +83,6 @@ impl UrlWasher {
                 .put(url.to_owned(), cleaned.to_owned());
         }
         cleaned
-    }
-
-    pub fn config(&self) -> UrlWasherConfig {
-        self.config.read().unwrap().to_owned()
-    }
-
-    pub fn set_config(&self, config: UrlWasherConfig) {
-        *self.config.write().unwrap() = config;
     }
 }
 
@@ -158,6 +150,15 @@ pub struct UrlWasherConfig {
     pub tiktok_policy: RedirectWashPolicy,
 }
 
+impl Default for UrlWasherConfig {
+    fn default() -> Self {
+        Self {
+            mixer_instance: Default::default(),
+            tiktok_policy: RedirectWashPolicy::Ignore,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum RedirectWashPolicy {
     /// Do not resolve redirection.
@@ -187,15 +188,14 @@ impl Display for RedirectWashPolicy {
 mod tests {
     use url::Url;
 
-    use crate::{RedirectWashPolicy, UrlWasher};
+    use crate::{RedirectWashPolicy, UrlWasher, UrlWasherConfig};
 
     #[tokio::test]
     async fn test_cleaning() {
-        let washer = UrlWasher::default();
-        let mut config = washer.config();
-        config.tiktok_policy = RedirectWashPolicy::Locally;
-        washer.set_config(config);
-
+        let washer = UrlWasher::new(UrlWasherConfig {
+            mixer_instance: None,
+            tiktok_policy: RedirectWashPolicy::Locally,
+        });
         let tests = [
             (
                 "https://youtu.be/lSwnPoo9ZK0?si=TrackingParamValue&t=65",
