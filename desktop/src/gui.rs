@@ -1,18 +1,18 @@
 use eframe::egui;
 use tracing::debug;
 use tray_icon::{
-    menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem},
+    menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     TrayIcon, TrayIconBuilder,
 };
 use url::Url;
 use urlwasher::{RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
 
-use crate::{AppConfig, AppConfigFlow};
+use crate::{AppConfig, AppStateFlow, APP_NAME};
 
 pub struct ConfigWindow {
     hide: bool,
-    config_state: UiConfigState,
-    config_flow: AppConfigFlow,
+    ui_config_state: UiConfigState,
+    app_state_flow: AppStateFlow,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -22,50 +22,36 @@ struct UiConfigState {
     enable_clipboard_patcher: bool,
 }
 
-impl From<AppConfig> for UiConfigState {
-    fn from(config: AppConfig) -> Self {
-        Self {
-            mixer_instance: config
-                .url_washer
-                .mixer_instance
-                .map(|url| url.to_string())
-                .unwrap_or_default(),
-            tiktok_policy: config.url_washer.tiktok_policy,
-            enable_clipboard_patcher: config.enable_clipboard_patcher,
-        }
-    }
-}
-
-impl Into<AppConfig> for &UiConfigState {
-    fn into(self) -> AppConfig {
-        AppConfig {
-            url_washer: UrlWasherConfig {
-                mixer_instance: Url::parse(&self.mixer_instance).map(Some).unwrap_or(None),
-                tiktok_policy: self.tiktok_policy,
-            },
-            enable_clipboard_patcher: self.enable_clipboard_patcher,
-        }
-    }
+fn apply_ui_config(app_config: &mut AppConfig, ui_config: &UiConfigState) {
+    app_config.url_washer = UrlWasherConfig {
+        mixer_instance: Url::parse(&ui_config.mixer_instance)
+            .map(Some)
+            .unwrap_or(None),
+        tiktok_policy: ui_config.tiktok_policy,
+    };
+    app_config.enable_clipboard_patcher = ui_config.enable_clipboard_patcher;
 }
 
 impl ConfigWindow {
-    pub fn new(config_flow: AppConfigFlow) -> Self {
-        let mixer_instance = config_flow
-            .current()
+    pub fn new(app_state_flow: AppStateFlow) -> Self {
+        let app_state = app_state_flow.current();
+        let config = &app_state.config;
+        let mixer_instance = config
             .url_washer
             .mixer_instance
             .as_ref()
             .map(|url| url.to_string())
             .unwrap_or_default();
-        let config_state = UiConfigState {
+        let ui_config_state = UiConfigState {
             mixer_instance,
-            tiktok_policy: config_flow.current().url_washer.tiktok_policy,
+            tiktok_policy: config.url_washer.tiktok_policy,
             enable_clipboard_patcher: true,
         };
+        drop(app_state);
         Self {
             hide: false,
-            config_state,
-            config_flow,
+            ui_config_state,
+            app_state_flow,
         }
     }
 }
@@ -77,9 +63,9 @@ impl eframe::App for ConfigWindow {
             frame.set_visible(false);
         }
 
-        let previous_config = self.config_state.clone();
+        let previous_config = self.ui_config_state.clone();
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.checkbox(&mut self.config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
+            ui.checkbox(&mut self.ui_config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
 
             ui.separator();
             {
@@ -97,32 +83,34 @@ impl eframe::App for ConfigWindow {
                         This option allows you to resolve these links via service hosted on other network.\n\
                         ⚠ It sends url to third party person if you don't host mixer yourself ⚠ (Not so scary for TikTok videos tho) \
                         ");
-                    ui.text_edit_singleline(&mut self.config_state.mixer_instance)
+                    ui.text_edit_singleline(&mut self.ui_config_state.mixer_instance)
                         .labelled_by(name_label.id);
                     if ui.button("use public instance").clicked() {
-                        self.config_state.mixer_instance = PUBLIC_MIXER_INSTANCE.to_string();
+                        self.ui_config_state.mixer_instance = PUBLIC_MIXER_INSTANCE.to_string();
                     }
                 });
-                if !self.config_state.mixer_instance.is_empty() {
-                    if let Err(err) = Url::parse(&self.config_state.mixer_instance) {
+                if !self.ui_config_state.mixer_instance.is_empty() {
+                    if let Err(err) = Url::parse(&self.ui_config_state.mixer_instance) {
                         ui.colored_label(ui.visuals().error_fg_color, format!("Invalid url: {err}"));
                     }
                 }
 
                 ui.separator();
                 egui::ComboBox::from_label("TikTok")
-                    .selected_text(format!("{}", self.config_state.tiktok_policy))
+                    .selected_text(format!("{}", self.ui_config_state.tiktok_policy))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.config_state.tiktok_policy, RedirectWashPolicy::Ignore, "ignore");
-                        ui.selectable_value(&mut self.config_state.tiktok_policy, RedirectWashPolicy::Locally, "locally");
-                        ui.selectable_value(&mut self.config_state.tiktok_policy, RedirectWashPolicy::ViaMixer, "via mixer");
+                        ui.selectable_value(&mut self.ui_config_state.tiktok_policy, RedirectWashPolicy::Ignore, "ignore");
+                        ui.selectable_value(&mut self.ui_config_state.tiktok_policy, RedirectWashPolicy::Locally, "locally");
+                        ui.selectable_value(&mut self.ui_config_state.tiktok_policy, RedirectWashPolicy::ViaMixer, "via mixer");
                     });
             }
         });
 
-        if previous_config != self.config_state {
+        if previous_config != self.ui_config_state {
             debug!("Config changed.");
-            let _ = self.config_flow.tx.send((&self.config_state).into());
+            self.app_state_flow.modify_config(|config| {
+                apply_ui_config(config, &self.ui_config_state);
+            });
         }
     }
 
@@ -135,6 +123,7 @@ impl eframe::App for ConfigWindow {
 pub struct TrayMenu {
     _tray_icon: TrayIcon,
     pub wash_clipboard: MenuItem,
+    pub pause_clipboard_washer: CheckMenuItem,
     pub open_config: MenuItem,
 }
 
@@ -142,17 +131,20 @@ impl TrayMenu {
     pub fn new() -> Self {
         let tray_menu = Menu::new();
         let wash_clipboard = MenuItem::new("Debloat current clipboard", true, None);
+        let pause_clipboard_washer =
+            CheckMenuItem::new("Pause clipboard debloater temporary", true, false, None);
         let open_config = MenuItem::new("Open configuration", true, None);
         tray_menu
             .append_items(&[
                 &wash_clipboard,
+                &pause_clipboard_washer,
                 &PredefinedMenuItem::separator(),
                 &open_config,
                 &PredefinedMenuItem::separator(),
                 &PredefinedMenuItem::about(
                     None,
                     Some(AboutMetadata {
-                        name: Some("UrlDebloater".to_string()),
+                        name: Some(APP_NAME.to_string()),
                         comments: Some("Remove tracking parameters from URLs...".to_string()),
                         ..Default::default()
                     }),
@@ -162,7 +154,7 @@ impl TrayMenu {
             .unwrap();
         let icon = load_tray_icon();
         let tray_icon = TrayIconBuilder::new()
-            .with_tooltip("UrlDebloater")
+            .with_tooltip(APP_NAME)
             .with_icon(icon)
             .with_menu(Box::new(tray_menu))
             .build()
@@ -170,6 +162,7 @@ impl TrayMenu {
         Self {
             _tray_icon: tray_icon,
             wash_clipboard,
+            pause_clipboard_washer,
             open_config,
         }
     }

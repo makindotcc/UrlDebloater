@@ -181,7 +181,7 @@ async fn resolve_redirect(
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UrlWasherConfig {
     pub mixer_instance: Option<Url>,
     pub tiktok_policy: RedirectWashPolicy,
@@ -196,7 +196,7 @@ impl Default for UrlWasherConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RedirectWashPolicy {
     /// Do not resolve redirection.
     Ignore,
