@@ -120,8 +120,8 @@ mod tests {
                 "https://x.com/sekurak/status/1737942071431073818",
             ),
             (
-                "https://vm.tiktok.com/ZGJsEDpFN/",
-                "https://www.tiktok.com/@python_is_trash/video/7270531341521849605",
+                "https://vm.tiktok.com/ZGJoJs8jb/",
+                "https://www.tiktok.com/@i0ki.clips/video/7297742182851611936",
             ),
         ];
 
