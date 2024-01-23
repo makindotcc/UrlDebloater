@@ -24,6 +24,22 @@ pub struct AppConfig {
     enable_clipboard_patcher: bool,
 }
 
+pub struct AppConfigFlow {
+    pub tx: watch::Sender<AppConfig>,
+    pub rx: watch::Receiver<AppConfig>,
+}
+
+impl AppConfigFlow {
+    pub fn new(config: AppConfig) -> Self {
+        let (tx, rx) = watch::channel(config);
+        Self { rx, tx }
+    }
+
+    pub fn current(&self) -> watch::Ref<'_, AppConfig> {
+        self.rx.borrow()
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -41,9 +57,9 @@ async fn main() -> anyhow::Result<()> {
         },
         enable_clipboard_patcher: true,
     };
-    let (config_tx, config_rx) = watch::channel(config);
+    let config_flow = AppConfigFlow::new(config);
     {
-        let mut config_rx = config_rx.clone();
+        let mut config_rx = config_flow.rx.clone();
         tokio::spawn(async move {
             loop {
                 let config = config_rx.borrow_and_update().to_owned();
@@ -58,8 +74,7 @@ async fn main() -> anyhow::Result<()> {
             }
         });
     }
-    let config = config_rx.borrow().to_owned();
-    run_gui(config, config_tx);
+    run_gui(config_flow);
 }
 
 async fn run_background_jobs(config: AppConfig) {
@@ -110,7 +125,7 @@ async fn run_clipboard_patcher(text_washer: &TextWasher) -> anyhow::Result<()> {
     }
 }
 
-fn run_gui(config: AppConfig, config_changed: watch::Sender<AppConfig>) -> ! {
+fn run_gui(config_flow: AppConfigFlow) -> ! {
     let event_loop = eframe::EventLoopBuilder::<eframe::UserEvent>::with_user_event().build();
     let tray_menu = TrayMenu::new();
     let menu_receiver = MenuEvent::receiver();
@@ -122,14 +137,16 @@ fn run_gui(config: AppConfig, config_changed: watch::Sender<AppConfig>) -> ! {
             initial_window_size: Some(egui::vec2(620.0, 340.0)),
             ..Default::default()
         },
-        Box::new(|_cc| Box::new(ConfigWindow::new(config, config_changed))),
+        Box::new(|_cc| Box::new(ConfigWindow::new(config_flow))),
     );
     event_loop.run(move |event, event_loop, control_flow| {
         if let Ok(event) = menu_receiver.try_recv() {
-            if event.id() == tray_menu.open_config.id() {
+            let event_id = event.id();
+            if event_id == tray_menu.open_config.id() {
                 if let Some(window) = detached_app.window() {
                     window.set_visible(true);
                 }
+            } else if event_id == tray_menu.wash_clipboard.id() {
             }
         }
         *control_flow = match detached_app.on_event(&event, event_loop).unwrap() {

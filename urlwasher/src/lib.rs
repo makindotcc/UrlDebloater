@@ -1,9 +1,8 @@
-use std::{fmt::Display, num::NonZeroUsize, ops::Deref};
-
 use anyhow::{anyhow, Context};
 use lru::LruCache;
 use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
+use std::{fmt::Display, num::NonZeroUsize, sync::OnceLock};
 use tokio::sync::Mutex;
 use tracing::debug;
 use url::Url;
@@ -11,6 +10,51 @@ use url::Url;
 pub mod text_washer;
 
 pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
+
+static DEFAULT_RULE_SET: OnceLock<Vec<DirtyUrlRule>> = OnceLock::new();
+
+fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
+    DEFAULT_RULE_SET.get_or_init(|| {
+        vec![
+            DirtyUrlRule {
+                domains: vec!["youtu.be".to_string()],
+                washing_programs: vec![WashingProgram::remove_some_params(&["si"])],
+                ..Default::default()
+            },
+            DirtyUrlRule {
+                domains: vec![
+                    "youtube.com".to_string(),
+                    "www.youtube.com".to_string(),
+                    "music.youtube.com".to_string(),
+                ],
+                washing_programs: vec![WashingProgram::remove_some_params(&["si"])],
+                ..Default::default()
+            },
+            DirtyUrlRule {
+                domains: vec!["twitter.com".to_string(), "x.com".to_string()],
+                path_pattern: vec![],
+                washing_programs: vec![WashingProgram::RemoveAllParams],
+                ..Default::default()
+            },
+            DirtyUrlRule {
+                domains: vec!["vm.tiktok.com".to_string()],
+                washing_programs: vec![
+                    WashingProgram::ResolveRedirection(RedirectWashPolicy::Locally),
+                    WashingProgram::RemoveAllParams,
+                ],
+                ..Default::default()
+            },
+            DirtyUrlRule {
+                domains: vec!["on.soundcloud.com".to_string()],
+                washing_programs: vec![
+                    WashingProgram::ResolveRedirection(RedirectWashPolicy::Locally),
+                    WashingProgram::RemoveAllParams,
+                ],
+                ..Default::default()
+            },
+        ]
+    })
+}
 
 pub struct UrlWasher {
     cache: Mutex<LruCache<Url, Url>>,
@@ -29,7 +73,7 @@ impl UrlWasher {
         Self {
             cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())),
             http_client: reqwest::Client::builder()
-                .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .redirect(Policy::none())
                 .build()
                 .unwrap(),
@@ -49,49 +93,42 @@ impl UrlWasher {
             Some(domain) => domain,
             None => return Ok(None),
         };
-        let cleaned = match domain {
-            "youtu.be" => Ok(Some(remove_query_params(url, &["si"]))),
-            "youtube.com" | "www.youtube.com" | "music.youtube.com" if url.path() == "/watch" => {
-                Ok(Some(remove_query_params(url, &["si"])))
-            }
-            "twitter.com" | "x.com"
-                if url
-                    .path_segments()
-                    .is_some_and(|segments| matches!(segments.skip(1).next(), Some("status"))) =>
-            {
-                Ok(Some(remove_query_params(url, &["s", "t"])))
-            }
-            "vm.tiktok.com" => resolve_redirect(
-                &self.http_client,
-                url.to_owned(),
-                &self.config,
-                self.config.tiktok_policy,
-            )
-            .await
-            .map(|url_maybe| {
-                url_maybe.map(|mut url| {
-                    url.set_query(None);
-                    url
-                })
-            }),
-            _ => return Ok(None),
+        let rules = default_rule_set();
+        let matching_rule = match rules
+            .iter()
+            .find(|rule| rule.matches_domain(domain) && rule.matches_path(url))
+        {
+            Some(r) => r,
+            None => return Ok(None),
         };
-        if let Ok(Some(cleaned)) = &cleaned {
-            self.cache
-                .lock()
-                .await
-                .put(url.to_owned(), cleaned.to_owned());
+        let mut laundry = url.to_owned();
+        for washing_program in matching_rule.washing_programs.iter() {
+            laundry = match washing_program {
+                WashingProgram::ResolveRedirection(policy) => {
+                    match resolve_redirect(&self.http_client, laundry, &self.config, *policy).await
+                    {
+                        Ok(Ok(url)) | Ok(Err(url)) => url,
+                        Err(err) => return Err(err),
+                    }
+                }
+                WashingProgram::RemoveSomeParams(params) => remove_query_params(&laundry, &params),
+                WashingProgram::RemoveAllParams => {
+                    laundry.set_query(None);
+                    laundry
+                }
+            };
         }
-        cleaned
+        self.cache.lock().await.put(url.to_owned(), laundry.clone());
+        Ok(Some(laundry))
     }
 }
 
-fn remove_query_params(url: &Url, params: &[&str]) -> Url {
+fn remove_query_params(url: &Url, params: &[String]) -> Url {
     let mut debloated_url = url.clone();
     debloated_url.query_pairs_mut().clear();
     let debloated_query = url
         .query_pairs()
-        .filter(|(query_key, _)| !params.contains(&query_key.deref()));
+        .filter(|(query_key, _)| params.iter().all(|param| param != query_key));
     for (query_key, query_value) in debloated_query {
         debloated_url
             .query_pairs_mut()
@@ -108,9 +145,9 @@ async fn resolve_redirect(
     url: Url,
     config: &UrlWasherConfig,
     policy: RedirectWashPolicy,
-) -> anyhow::Result<Option<Url>> {
+) -> anyhow::Result<Result<Url, Url>> {
     match policy {
-        RedirectWashPolicy::Ignore => return Ok(None),
+        RedirectWashPolicy::Ignore => return Ok(Err(url)),
         RedirectWashPolicy::Locally => {
             let resp = http_client.get(url).send().await?;
             let location = resp
@@ -119,7 +156,7 @@ async fn resolve_redirect(
                 .context("missing location header")?
                 .to_str()
                 .context("invalid location header")?;
-            Url::parse(location).context("parse location url").map(Some)
+            Url::parse(location).context("parse location url").map(Ok)
         }
         RedirectWashPolicy::ViaMixer => {
             let mixer_instance = config
@@ -139,7 +176,7 @@ async fn resolve_redirect(
             }
             Url::parse(&resp.text().await.context("read mixer response url")?)
                 .context("parse mixer response url")
-                .map(Some)
+                .map(Ok)
         }
     }
 }
@@ -184,6 +221,49 @@ impl Display for RedirectWashPolicy {
     }
 }
 
+#[derive(Default)]
+struct DirtyUrlRule {
+    domains: Vec<String>,
+    path_pattern: Vec<Option<String>>,
+    washing_programs: Vec<WashingProgram>,
+}
+
+impl DirtyUrlRule {
+    pub fn matches_domain(&self, domain: &str) -> bool {
+        self.domains
+            .iter()
+            .any(|dirty_domain| dirty_domain == domain)
+    }
+
+    pub fn matches_path(&self, url: &Url) -> bool {
+        if self.path_pattern.is_empty() {
+            return true;
+        }
+        let segments = match url.path_segments() {
+            Some(segments) => segments,
+            None => return false,
+        };
+        segments
+            .zip(&self.path_pattern)
+            .all(|(actual, template)| match template {
+                Some(template) => actual == template,
+                None => true,
+            })
+    }
+}
+
+enum WashingProgram {
+    ResolveRedirection(RedirectWashPolicy),
+    RemoveSomeParams(Vec<String>),
+    RemoveAllParams,
+}
+
+impl WashingProgram {
+    pub fn remove_some_params(values: &[&str]) -> Self {
+        Self::RemoveSomeParams(values.into_iter().map(|s| String::from(*s)).collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use url::Url;
@@ -210,8 +290,12 @@ mod tests {
                 "https://x.com/sekurak/status/1737942071431073818",
             ),
             (
-                "https://vm.tiktok.com/ZGJsEDpFN/",
-                "https://www.tiktok.com/@python_is_trash/video/7270531341521849605",
+                "https://vm.tiktok.com/ZGJoJs8jb/",
+                "https://www.tiktok.com/@i0ki.clips/video/7297742182851611936",
+            ),
+            (
+                "https://on.soundcloud.com/VLwCL",
+                "https://soundcloud.com/djwipeoutnxc/i-c-right-thru-2-u",
             ),
         ];
 

@@ -1,5 +1,4 @@
 use eframe::egui;
-use tokio::sync::watch;
 use tracing::debug;
 use tray_icon::{
     menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem},
@@ -8,12 +7,12 @@ use tray_icon::{
 use url::Url;
 use urlwasher::{RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
 
-use crate::AppConfig;
+use crate::{AppConfig, AppConfigFlow};
 
 pub struct ConfigWindow {
     hide: bool,
     config_state: UiConfigState,
-    config_changed: watch::Sender<AppConfig>,
+    config_flow: AppConfigFlow,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -50,19 +49,23 @@ impl Into<AppConfig> for &UiConfigState {
 }
 
 impl ConfigWindow {
-    pub fn new(config: AppConfig, config_changed: watch::Sender<AppConfig>) -> Self {
+    pub fn new(config_flow: AppConfigFlow) -> Self {
+        let mixer_instance = config_flow
+            .current()
+            .url_washer
+            .mixer_instance
+            .as_ref()
+            .map(|url| url.to_string())
+            .unwrap_or_default();
+        let config_state = UiConfigState {
+            mixer_instance,
+            tiktok_policy: config_flow.current().url_washer.tiktok_policy,
+            enable_clipboard_patcher: true,
+        };
         Self {
             hide: false,
-            config_state: UiConfigState {
-                mixer_instance: config
-                    .url_washer
-                    .mixer_instance
-                    .map(|url| url.to_string())
-                    .unwrap_or_default(),
-                tiktok_policy: config.url_washer.tiktok_policy,
-                enable_clipboard_patcher: true,
-            },
-            config_changed,
+            config_state,
+            config_flow,
         }
     }
 }
@@ -119,7 +122,7 @@ impl eframe::App for ConfigWindow {
 
         if previous_config != self.config_state {
             debug!("Config changed.");
-            let _ = self.config_changed.send((&self.config_state).into());
+            let _ = self.config_flow.tx.send((&self.config_state).into());
         }
     }
 
@@ -131,15 +134,21 @@ impl eframe::App for ConfigWindow {
 
 pub struct TrayMenu {
     _tray_icon: TrayIcon,
+    pub wash_clipboard: MenuItem,
     pub open_config: MenuItem,
 }
 
 impl TrayMenu {
     pub fn new() -> Self {
         let tray_menu = Menu::new();
+        let wash_clipboard = MenuItem::new("Debloat current clipboard", true, None);
         let open_config = MenuItem::new("Open configuration", true, None);
         tray_menu
             .append_items(&[
+                &wash_clipboard,
+                &PredefinedMenuItem::separator(),
+                &open_config,
+                &PredefinedMenuItem::separator(),
                 &PredefinedMenuItem::about(
                     None,
                     Some(AboutMetadata {
@@ -148,8 +157,6 @@ impl TrayMenu {
                         ..Default::default()
                     }),
                 ),
-                &open_config,
-                &PredefinedMenuItem::separator(),
                 &PredefinedMenuItem::quit(None),
             ])
             .unwrap();
@@ -162,6 +169,7 @@ impl TrayMenu {
             .expect("Could not create tray icon");
         Self {
             _tray_icon: tray_icon,
+            wash_clipboard,
             open_config,
         }
     }
