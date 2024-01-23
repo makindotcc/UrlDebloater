@@ -1,4 +1,4 @@
-use std::{ops::Deref, num::NonZeroUsize};
+use std::{num::NonZeroUsize, ops::Deref};
 
 use anyhow::Context;
 use lru::LruCache;
@@ -17,7 +17,7 @@ pub struct UrlWasher {
 impl Default for UrlWasher {
     fn default() -> Self {
         Self {
-            cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())), 
+            cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())),
             http_client: reqwest::Client::builder()
                 .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .redirect(Policy::none())
@@ -41,30 +41,33 @@ impl UrlWasher {
             None => return Ok(None),
         };
         let cleaned = match domain {
-            "youtu.be" => Ok(Some(Self::remove_query_params(url, &["si"]))),
+            "youtu.be" => Ok(Self::remove_query_params(url, &["si"])),
             "youtube.com" | "www.youtube.com" | "music.youtube.com" if url.path() == "/watch" => {
-                Ok(Some(Self::remove_query_params(url, &["si"])))
+                Ok(Self::remove_query_params(url, &["si"]))
             }
             "twitter.com" | "x.com"
                 if url
                     .path_segments()
                     .is_some_and(|segments| matches!(segments.skip(1).next(), Some("status"))) =>
             {
-                Ok(Some(Self::remove_query_params(url, &["s", "t"])))
+                Ok(Self::remove_query_params(url, &["s", "t"]))
             }
-            "vm.tiktok.com" => self
+            "vm.tiktok.com" | "on.soundcloud.com" => self
                 .resolve_redirect(url.to_owned())
                 .await
                 .map(|mut resolved| {
                     resolved.set_query(None);
-                    Some(resolved)
+                    resolved
                 }),
             _ => return Ok(None),
         };
-        if let Ok(Some(cleaned)) = &cleaned {
-            self.cache.lock().await.put(url.to_owned(), cleaned.to_owned());
+        if let Ok(cleaned) = &cleaned {
+            self.cache
+                .lock()
+                .await
+                .put(url.to_owned(), cleaned.to_owned());
         }
-        cleaned
+        cleaned.map(Some)
     }
 
     fn remove_query_params(url: &Url, params: &[&str]) -> Url {
@@ -120,8 +123,12 @@ mod tests {
                 "https://x.com/sekurak/status/1737942071431073818",
             ),
             (
-                "https://vm.tiktok.com/ZGJoJs8jb/",
-                "https://www.tiktok.com/@i0ki.clips/video/7297742182851611936",
+                "https://vm.tiktok.com/ZGJsEDpFN/",
+                "https://www.tiktok.com/@python_is_trash/video/7270531341521849605",
+            ),
+            (
+                "https://on.soundcloud.com/VLwCL",
+                "https://soundcloud.com/djwipeoutnxc/i-c-right-thru-2-u",
             ),
         ];
 
