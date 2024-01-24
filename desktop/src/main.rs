@@ -125,7 +125,7 @@ async fn run_background_jobs(app_state: &AppState) {
         let paused_until = app_state.config.clipboard_patcher_paused_until;
         tasks.push(async move {
             if let Some(paused_until) = paused_until {
-                sleep_until(paused_until + CLIPBOARD_PAUSE_DURATION).await;
+                sleep_until(paused_until).await;
             }
             loop {
                 info!("Starting clipboard patcher");
