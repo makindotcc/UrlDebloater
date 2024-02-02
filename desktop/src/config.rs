@@ -1,8 +1,6 @@
-use std::{ops::Add, time::Duration};
-
 use anyhow::Context;
 use futures::Future;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use tokio::{fs, time::Instant};
 use urlwasher::UrlWasherConfig;
 
@@ -12,10 +10,7 @@ const CONFIG_FILE: &str = "config.json";
 pub struct AppConfig {
     pub url_washer: UrlWasherConfig,
     pub enable_clipboard_patcher: bool,
-    #[serde(
-        serialize_with = "serialize_pause_instant",
-        deserialize_with = "deserialize_pause_instant"
-    )]
+    #[serde(skip)]
     pub clipboard_patcher_paused_until: Option<Instant>,
 }
 
@@ -27,25 +22,6 @@ impl Default for AppConfig {
             clipboard_patcher_paused_until: None,
         }
     }
-}
-
-pub fn serialize_pause_instant<S>(
-    paused_until: &Option<Instant>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let duration_left = paused_until.map(|i| i.duration_since(Instant::now()));
-    duration_left.serialize(serializer)
-}
-
-pub fn deserialize_pause_instant<'de, D>(deserializer: D) -> Result<Option<Instant>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let duration_left = Option::<Duration>::deserialize(deserializer)?;
-    Ok(duration_left.map(|duration| Instant::now().add(duration)))
 }
 
 pub async fn from_file() -> anyhow::Result<AppConfig> {
