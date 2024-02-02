@@ -7,7 +7,7 @@ use config::AppConfig;
 use eframe::{egui, DetachedResult};
 use futures::{stream::FuturesUnordered, StreamExt};
 use notify_rust::Notification;
-use std::{sync::Arc, time::Duration};
+use std::{io::{self, ErrorKind}, sync::Arc, time::Duration};
 use tokio::{
     select,
     sync::{mpsc, watch},
@@ -83,7 +83,9 @@ async fn main() -> anyhow::Result<()> {
     debug!("Hello, world!");
 
     let config = config::from_file().await.unwrap_or_else(|err| {
-        error!("Could not read config file: {err:?}. Using default...");
+        if !err.downcast_ref::<io::Error>().is_some_and(|err| err.kind() == ErrorKind::NotFound) {
+            error!("Could not read config file: {err:?}. Using default...");
+        }
         AppConfig::default()
     });
     let app_state = AppState::new(config);
