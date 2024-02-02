@@ -7,7 +7,9 @@ use tray_icon::{
     TrayIcon, TrayIconBuilder,
 };
 use url::Url;
-use urlwasher::{Domain, RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
+use urlwasher::{
+    rule_set, RedirectWashPolicy, RuleName, UrlWasherConfig, WashingProgram, PUBLIC_MIXER_INSTANCE,
+};
 
 use crate::{AppConfig, AppStateFlow, APP_NAME};
 
@@ -20,7 +22,7 @@ pub struct ConfigWindow {
 #[derive(PartialEq, Eq, Clone)]
 struct UiConfigState {
     mixer_instance: String,
-    redirect_policy: HashMap<Domain, RedirectWashPolicy>,
+    redirect_policy: HashMap<RuleName, RedirectWashPolicy>,
     enable_clipboard_patcher: bool,
 }
 
@@ -98,8 +100,15 @@ impl eframe::App for ConfigWindow {
                     }
                 }
 
-                for (domain, policy) in self.ui_config_state.redirect_policy.iter_mut() {
-                    egui::ComboBox::from_label(domain)
+                for rule in rule_set().iter().filter(|rule| rule.washing_programs.contains(&WashingProgram::ResolveRedirection)) {
+                    let policy = match self.ui_config_state.redirect_policy.get_mut(&rule.name) {
+                        Some(policy) => policy,
+                        None => {
+                            self.ui_config_state.redirect_policy.entry(rule.name.clone()).or_insert(RedirectWashPolicy::Ignore)
+                        },
+                    };
+                    
+                    egui::ComboBox::from_label(rule.domains.join(", "))
                         .selected_text(policy.to_string())
                         .show_ui(ui, |ui| {
                             ui.selectable_value(policy, RedirectWashPolicy::Ignore, "ignore");

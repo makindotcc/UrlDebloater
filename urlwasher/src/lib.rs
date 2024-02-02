@@ -13,17 +13,19 @@ pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
 
 static DEFAULT_RULE_SET: OnceLock<Vec<DirtyUrlRule>> = OnceLock::new();
 
-pub type Domain = String;
+pub type RuleName = String;
 
-fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
+pub fn rule_set() -> &'static Vec<DirtyUrlRule> {
     DEFAULT_RULE_SET.get_or_init(|| {
         vec![
             DirtyUrlRule {
+                name: "youtu.be".to_string(),
                 domains: vec!["youtu.be".to_string()],
                 washing_programs: vec![WashingProgram::remove_some_params(&["si"])],
                 ..Default::default()
             },
             DirtyUrlRule {
+                name: "youtube.com & music.youtube.com".to_string(),
                 domains: vec![
                     "youtube.com".to_string(),
                     "www.youtube.com".to_string(),
@@ -33,12 +35,14 @@ fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
                 ..Default::default()
             },
             DirtyUrlRule {
+                name: "twitter.com".to_string(),
                 domains: vec!["twitter.com".to_string(), "x.com".to_string()],
                 path_pattern: vec![],
                 washing_programs: vec![WashingProgram::RemoveAllParams],
                 ..Default::default()
             },
             DirtyUrlRule {
+                name: "vm.tiktok.com".to_string(),
                 domains: vec!["vm.tiktok.com".to_string()],
                 washing_programs: vec![
                     WashingProgram::ResolveRedirection,
@@ -47,6 +51,7 @@ fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
                 ..Default::default()
             },
             DirtyUrlRule {
+                name: "on.soundcloud.com".to_string(),
                 domains: vec!["on.soundcloud.com".to_string()],
                 washing_programs: vec![
                     WashingProgram::ResolveRedirection,
@@ -95,7 +100,7 @@ impl UrlWasher {
             Some(domain) => domain,
             None => return Ok(None),
         };
-        let rules = default_rule_set();
+        let rules = rule_set();
         let matching_rule = match rules
             .iter()
             .find(|rule| rule.matches_domain(domain) && rule.matches_path(url))
@@ -107,7 +112,19 @@ impl UrlWasher {
         for washing_program in matching_rule.washing_programs.iter() {
             laundry = match washing_program {
                 WashingProgram::ResolveRedirection => {
-                    match resolve_redirect(&self.http_client, laundry, &self.config).await {
+                    let policy = self
+                        .config
+                        .redirect_policy
+                        .get(&matching_rule.name)
+                        .unwrap_or(&RedirectWashPolicy::Ignore);
+                    match resolve_redirect(
+                        &self.http_client,
+                        laundry,
+                        policy,
+                        &self.config.mixer_instance,
+                    )
+                    .await
+                    {
                         Ok(Ok(url)) | Ok(Err(url)) => url,
                         Err(err) => return Err(err),
                     }
@@ -144,12 +161,9 @@ fn remove_query_params(url: &Url, params: &[String]) -> Url {
 async fn resolve_redirect(
     http_client: &reqwest::Client,
     url: Url,
-    config: &UrlWasherConfig,
+    policy: &RedirectWashPolicy,
+    mixer_instance: &Option<Url>,
 ) -> anyhow::Result<Result<Url, Url>> {
-    let policy = url
-        .domain()
-        .and_then(|domain| config.redirect_policy.get(domain))
-        .unwrap_or(&RedirectWashPolicy::Ignore);
     match policy {
         RedirectWashPolicy::Ignore => return Ok(Err(url)),
         RedirectWashPolicy::Locally => {
@@ -163,9 +177,8 @@ async fn resolve_redirect(
             Url::parse(location).context("parse location url").map(Ok)
         }
         RedirectWashPolicy::ViaMixer => {
-            let mixer_instance = config
-                .mixer_instance
-                .clone()
+            let mixer_instance = mixer_instance
+                .as_ref()
                 .context("undefined mixer instance")?;
             let mut wash_url = mixer_instance.clone();
             wash_url.set_path("wash");
@@ -188,7 +201,7 @@ async fn resolve_redirect(
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UrlWasherConfig {
     pub mixer_instance: Option<Url>,
-    pub redirect_policy: HashMap<Domain, RedirectWashPolicy>,
+    pub redirect_policy: HashMap<RuleName, RedirectWashPolicy>,
 }
 
 impl Default for UrlWasherConfig {
@@ -196,7 +209,7 @@ impl Default for UrlWasherConfig {
         Self {
             mixer_instance: Default::default(),
             redirect_policy: HashMap::from_iter(
-                default_rule_set()
+                rule_set()
                     .iter()
                     .filter(|rule| {
                         rule.washing_programs
@@ -238,10 +251,11 @@ impl Display for RedirectWashPolicy {
 }
 
 #[derive(Default)]
-struct DirtyUrlRule {
-    domains: Vec<String>,
-    path_pattern: Vec<Option<String>>,
-    washing_programs: Vec<WashingProgram>,
+pub struct DirtyUrlRule {
+    pub name: String,
+    pub domains: Vec<String>,
+    pub path_pattern: Vec<Option<String>>,
+    pub washing_programs: Vec<WashingProgram>,
 }
 
 impl DirtyUrlRule {
@@ -269,7 +283,7 @@ impl DirtyUrlRule {
 }
 
 #[derive(PartialEq, Eq)]
-enum WashingProgram {
+pub enum WashingProgram {
     ResolveRedirection,
     RemoveSomeParams(Vec<String>),
     RemoveAllParams,
