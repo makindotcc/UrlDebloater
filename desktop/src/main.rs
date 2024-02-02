@@ -10,7 +10,7 @@ use notify_rust::Notification;
 use std::{sync::Arc, time::Duration};
 use tokio::{
     select,
-    sync::watch,
+    sync::{mpsc, watch},
     time::{sleep, sleep_until, Instant},
 };
 use tracing::{debug, error, info};
@@ -176,10 +176,25 @@ async fn run_clipboard_patcher(text_washer: &TextWasher) -> anyhow::Result<()> {
 }
 
 fn run_gui(app_state_flow: AppStateFlow) -> ! {
-    let event_loop = eframe::EventLoopBuilder::<eframe::UserEvent>::with_user_event().build();
-    let tray_menu = TrayMenu::new();
-    let menu_receiver = MenuEvent::receiver();
+    let (tray_event_tx, mut tray_event_rx) = mpsc::channel(10);
+    #[cfg(target_os = "linux")]
+    {
+        let app_state_flow = app_state_flow.clone();
+        std::thread::spawn(move || {
+            gtk::init().unwrap();
 
+            let mut tray_handler = TrayHandler::new(app_state_flow, tray_event_tx);
+            glib::timeout_add_local(Duration::from_millis(100), move || {
+                tray_handler.update();
+                glib::ControlFlow::Continue
+            });
+            gtk::main();
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    let mut tray_handler = TrayHandler::new(app_state_flow.clone(), tray_event_tx);
+
+    let event_loop = eframe::EventLoopBuilder::<eframe::UserEvent>::with_user_event().build();
     let mut detached_app = eframe::run_detached_native(
         APP_NAME,
         &event_loop,
@@ -194,40 +209,44 @@ fn run_gui(app_state_flow: AppStateFlow) -> ! {
     );
 
     event_loop.run(move |event, event_loop, control_flow| {
-        if let Ok(event) = menu_receiver.try_recv() {
-            let event_id = event.id();
-            if event_id == tray_menu.open_config.id() {
-                if let Some(window) = detached_app.window() {
-                    window.set_visible(true);
+        #[cfg(not(target_os = "linux"))]
+        tray_handler.update();
+
+        while let Ok(tray_event) = tray_event_rx.try_recv() {
+            match tray_event {
+                TrayEvent::OpenConfig => {
+                    if let Some(window) = detached_app.window() {
+                        window.set_visible(true);
+                    }
                 }
-            } else if event_id == tray_menu.wash_clipboard.id() {
-                info!("Debloating clipboard from tray...");
-                let app_state = app_state_flow.rx.borrow().to_owned();
-                tokio::spawn(async move {
-                    if let Err(err) = tray_wash_clipboard(&app_state).await {
-                        error!("Could not wash clipboard from tray: {err:?}");
-                        if let Err(err) = Notification::new()
-                            .summary(APP_NAME)
-                            .body(&err.to_string())
-                            .show()
-                        {
-                            error!("Could not show error notification: {err}");
+                TrayEvent::WashClipboard => {
+                    info!("Debloating clipboard from tray...");
+                    let app_state = app_state_flow.rx.borrow().to_owned();
+                    tokio::spawn(async move {
+                        if let Err(err) = tray_wash_clipboard(&app_state).await {
+                            error!("Could not wash clipboard from tray: {err:?}");
+                            if let Err(err) = Notification::new()
+                                .summary(APP_NAME)
+                                .body(&err.to_string())
+                                .show()
+                            {
+                                error!("Could not show error notification: {err}");
+                            }
                         }
-                    }
-                });
-            } else if event_id == tray_menu.pause_clipboard_washer.id() {
-                app_state_flow.modify_config(|config| {
-                    if config.clipboard_patcher_paused_until.is_some() {
-                        config.clipboard_patcher_paused_until = None;
-                    } else {
-                        config.clipboard_patcher_paused_until =
-                            Some(Instant::now() + CLIPBOARD_PAUSE_DURATION);
-                    }
-                });
+                    });
+                }
+                TrayEvent::PauseClipboardWasher => {
+                    app_state_flow.modify_config(|config| {
+                        if config.clipboard_patcher_paused_until.is_some() {
+                            config.clipboard_patcher_paused_until = None;
+                        } else {
+                            config.clipboard_patcher_paused_until =
+                                Some(Instant::now() + CLIPBOARD_PAUSE_DURATION);
+                        }
+                    });
+                }
             }
         }
-
-        update_tray_state(&tray_menu, &app_state_flow.current());
 
         *control_flow = match detached_app.on_event(&event, event_loop).unwrap() {
             DetachedResult::Exit => ControlFlow::Exit,
@@ -242,6 +261,48 @@ fn run_gui(app_state_flow: AppStateFlow) -> ! {
             }
         };
     });
+}
+
+struct TrayHandler {
+    tray_menu: TrayMenu,
+    app_state_flow: AppStateFlow,
+    event_tx: mpsc::Sender<TrayEvent>,
+}
+
+impl TrayHandler {
+    fn new(app_state_flow: AppStateFlow, event_tx: mpsc::Sender<TrayEvent>) -> Self {
+        Self {
+            tray_menu: TrayMenu::new(),
+            app_state_flow,
+            event_tx,
+        }
+    }
+
+    fn update(&mut self) {
+        while let Ok(event) = MenuEvent::receiver().try_recv() {
+            let event_id = event.id();
+            let tray_event = if event_id == self.tray_menu.open_config.id() {
+                TrayEvent::OpenConfig
+            } else if event_id == self.tray_menu.wash_clipboard.id() {
+                TrayEvent::WashClipboard
+            } else if event_id == self.tray_menu.pause_clipboard_washer.id() {
+                TrayEvent::PauseClipboardWasher
+            } else {
+                continue;
+            };
+            if let Err(err) = self.event_tx.try_send(tray_event) {
+                error!("Could not send tray event: {err:?}");
+            }
+        }
+
+        update_tray_state(&self.tray_menu, &self.app_state_flow.current());
+    }
+}
+
+enum TrayEvent {
+    OpenConfig,
+    WashClipboard,
+    PauseClipboardWasher,
 }
 
 fn update_tray_state(tray_menu: &TrayMenu, app_state: &AppState) {
