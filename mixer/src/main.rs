@@ -19,7 +19,7 @@ use tower_http::ServiceBuilderExt;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use urlwasher::UrlWasher;
+use urlwasher::{RedirectWashPolicy, UrlWasher, UrlWasherConfig};
 
 mod error;
 
@@ -45,7 +45,14 @@ async fn main() {
 }
 
 fn app(rate_limit: bool) -> Router {
-    let url_washer = UrlWasher::default();
+    let url_washer = UrlWasher::new({
+        let mut config = UrlWasherConfig::default();
+        config
+            .redirect_policy
+            .iter_mut()
+            .for_each(|(_, redirect_policy)| *redirect_policy = RedirectWashPolicy::Locally);
+        config
+    });
     Router::new()
         .route("/wash", get(wash))
         .layer(
