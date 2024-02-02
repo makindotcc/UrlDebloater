@@ -22,10 +22,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            url_washer: UrlWasherConfig {
-                mixer_instance: None,
-                tiktok_policy: urlwasher::RedirectWashPolicy::Locally,
-            },
+            url_washer: UrlWasherConfig::default(),
             enable_clipboard_patcher: true,
             clipboard_patcher_paused_until: None,
         }

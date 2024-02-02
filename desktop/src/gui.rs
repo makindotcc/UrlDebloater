@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use eframe::egui;
 use tracing::debug;
 use tray_icon::{
@@ -5,7 +7,7 @@ use tray_icon::{
     TrayIcon, TrayIconBuilder,
 };
 use url::Url;
-use urlwasher::{RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
+use urlwasher::{Domain, RedirectWashPolicy, UrlWasherConfig, PUBLIC_MIXER_INSTANCE};
 
 use crate::{AppConfig, AppStateFlow, APP_NAME};
 
@@ -18,7 +20,7 @@ pub struct ConfigWindow {
 #[derive(PartialEq, Eq, Clone)]
 struct UiConfigState {
     mixer_instance: String,
-    tiktok_policy: RedirectWashPolicy,
+    redirect_policy: HashMap<Domain, RedirectWashPolicy>,
     enable_clipboard_patcher: bool,
 }
 
@@ -27,7 +29,7 @@ fn apply_ui_config(app_config: &mut AppConfig, ui_config: &UiConfigState) {
         mixer_instance: Url::parse(&ui_config.mixer_instance)
             .map(Some)
             .unwrap_or(None),
-        tiktok_policy: ui_config.tiktok_policy,
+        redirect_policy: ui_config.redirect_policy.clone(),
     };
     app_config.enable_clipboard_patcher = ui_config.enable_clipboard_patcher;
 }
@@ -44,7 +46,7 @@ impl ConfigWindow {
             .unwrap_or_default();
         let ui_config_state = UiConfigState {
             mixer_instance,
-            tiktok_policy: config.url_washer.tiktok_policy,
+            redirect_policy: config.url_washer.redirect_policy.clone(),
             enable_clipboard_patcher: true,
         };
         drop(app_state);
@@ -65,6 +67,7 @@ impl eframe::App for ConfigWindow {
 
         let previous_config = self.ui_config_state.clone();
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("Desktop settings");
             ui.checkbox(&mut self.ui_config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
 
             ui.separator();
@@ -95,14 +98,15 @@ impl eframe::App for ConfigWindow {
                     }
                 }
 
-                ui.separator();
-                egui::ComboBox::from_label("TikTok")
-                    .selected_text(format!("{}", self.ui_config_state.tiktok_policy))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.ui_config_state.tiktok_policy, RedirectWashPolicy::Ignore, "ignore");
-                        ui.selectable_value(&mut self.ui_config_state.tiktok_policy, RedirectWashPolicy::Locally, "locally");
-                        ui.selectable_value(&mut self.ui_config_state.tiktok_policy, RedirectWashPolicy::ViaMixer, "via mixer");
-                    });
+                for (domain, policy) in self.ui_config_state.redirect_policy.iter_mut() {
+                    egui::ComboBox::from_label(domain)
+                        .selected_text(policy.to_string())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(policy, RedirectWashPolicy::Ignore, "ignore");
+                            ui.selectable_value(policy, RedirectWashPolicy::Locally, "locally");
+                            ui.selectable_value(policy, RedirectWashPolicy::ViaMixer, "via mixer");
+                        });
+                }
             }
         });
 

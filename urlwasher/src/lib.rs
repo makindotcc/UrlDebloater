@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context};
 use lru::LruCache;
 use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, num::NonZeroUsize, sync::OnceLock};
+use std::{collections::HashMap, fmt::Display, num::NonZeroUsize, sync::OnceLock};
 use tokio::sync::Mutex;
 use tracing::debug;
 use url::Url;
@@ -12,6 +12,8 @@ pub mod text_washer;
 pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
 
 static DEFAULT_RULE_SET: OnceLock<Vec<DirtyUrlRule>> = OnceLock::new();
+
+pub type Domain = String;
 
 fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
     DEFAULT_RULE_SET.get_or_init(|| {
@@ -39,7 +41,7 @@ fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
             DirtyUrlRule {
                 domains: vec!["vm.tiktok.com".to_string()],
                 washing_programs: vec![
-                    WashingProgram::ResolveRedirection(RedirectWashPolicy::Locally),
+                    WashingProgram::ResolveRedirection,
                     WashingProgram::RemoveAllParams,
                 ],
                 ..Default::default()
@@ -47,7 +49,7 @@ fn default_rule_set() -> &'static Vec<DirtyUrlRule> {
             DirtyUrlRule {
                 domains: vec!["on.soundcloud.com".to_string()],
                 washing_programs: vec![
-                    WashingProgram::ResolveRedirection(RedirectWashPolicy::Locally),
+                    WashingProgram::ResolveRedirection,
                     WashingProgram::RemoveAllParams,
                 ],
                 ..Default::default()
@@ -104,9 +106,8 @@ impl UrlWasher {
         let mut laundry = url.to_owned();
         for washing_program in matching_rule.washing_programs.iter() {
             laundry = match washing_program {
-                WashingProgram::ResolveRedirection(policy) => {
-                    match resolve_redirect(&self.http_client, laundry, &self.config, *policy).await
-                    {
+                WashingProgram::ResolveRedirection => {
+                    match resolve_redirect(&self.http_client, laundry, &self.config).await {
                         Ok(Ok(url)) | Ok(Err(url)) => url,
                         Err(err) => return Err(err),
                     }
@@ -144,8 +145,11 @@ async fn resolve_redirect(
     http_client: &reqwest::Client,
     url: Url,
     config: &UrlWasherConfig,
-    policy: RedirectWashPolicy,
 ) -> anyhow::Result<Result<Url, Url>> {
+    let policy = url
+        .domain()
+        .and_then(|domain| config.redirect_policy.get(domain))
+        .unwrap_or(&RedirectWashPolicy::Ignore);
     match policy {
         RedirectWashPolicy::Ignore => return Ok(Err(url)),
         RedirectWashPolicy::Locally => {
@@ -184,14 +188,26 @@ async fn resolve_redirect(
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UrlWasherConfig {
     pub mixer_instance: Option<Url>,
-    pub tiktok_policy: RedirectWashPolicy,
+    pub redirect_policy: HashMap<Domain, RedirectWashPolicy>,
 }
 
 impl Default for UrlWasherConfig {
     fn default() -> Self {
         Self {
             mixer_instance: Default::default(),
-            tiktok_policy: RedirectWashPolicy::Ignore,
+            redirect_policy: HashMap::from_iter(
+                default_rule_set()
+                    .iter()
+                    .filter(|rule| {
+                        rule.washing_programs
+                            .contains(&WashingProgram::ResolveRedirection)
+                    })
+                    .flat_map(|rule| {
+                        rule.domains
+                            .iter()
+                            .map(|domain| (domain.to_owned(), RedirectWashPolicy::Locally))
+                    }),
+            ),
         }
     }
 }
@@ -252,8 +268,9 @@ impl DirtyUrlRule {
     }
 }
 
+#[derive(PartialEq, Eq)]
 enum WashingProgram {
-    ResolveRedirection(RedirectWashPolicy),
+    ResolveRedirection,
     RemoveSomeParams(Vec<String>),
     RemoveAllParams,
 }
@@ -268,14 +285,11 @@ impl WashingProgram {
 mod tests {
     use url::Url;
 
-    use crate::{RedirectWashPolicy, UrlWasher, UrlWasherConfig};
+    use crate::{UrlWasher, UrlWasherConfig};
 
     #[tokio::test]
     async fn test_cleaning() {
-        let washer = UrlWasher::new(UrlWasherConfig {
-            mixer_instance: None,
-            tiktok_policy: RedirectWashPolicy::Locally,
-        });
+        let washer = UrlWasher::new(UrlWasherConfig::default());
         let tests = [
             (
                 "https://youtu.be/lSwnPoo9ZK0?si=TrackingParamValue&t=65",
