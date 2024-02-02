@@ -1,5 +1,3 @@
-#![windows_subsystem = "windows"]
-
 use crate::{
     clipboard_poller::ClipboardPoller,
     gui::{ConfigWindow, TrayMenu},
@@ -9,11 +7,7 @@ use config::AppConfig;
 use eframe::{egui, DetachedResult};
 use futures::{stream::FuturesUnordered, StreamExt};
 use notify_rust::Notification;
-use std::{
-    io::{self, ErrorKind},
-    sync::Arc,
-    time::Duration,
-};
+use std::{io::{self, ErrorKind}, sync::Arc, time::Duration};
 use tokio::{
     select,
     sync::{mpsc, watch},
@@ -89,10 +83,7 @@ async fn main() -> anyhow::Result<()> {
     debug!("Hello, world!");
 
     let config = config::from_file().await.unwrap_or_else(|err| {
-        if !err
-            .downcast_ref::<io::Error>()
-            .is_some_and(|err| err.kind() == ErrorKind::NotFound)
-        {
+        if !err.downcast_ref::<io::Error>().is_some_and(|err| err.kind() == ErrorKind::NotFound) {
             error!("Could not read config file: {err:?}. Using default...");
         }
         AppConfig::default()
