@@ -3,27 +3,28 @@ use crate::{
     gui::{ConfigWindow, TrayMenu},
 };
 use anyhow::Context;
+use config::AppConfig;
 use eframe::{egui, DetachedResult};
-use futures::{stream::FuturesUnordered, Future, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use notify_rust::Notification;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{ops::Add, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::{
-    fs, select,
+    select,
     sync::watch,
     time::{sleep, sleep_until, Instant},
 };
 use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 use tray_icon::menu::MenuEvent;
-use urlwasher::{text_washer::TextWasher, UrlWasher, UrlWasherConfig};
+use urlwasher::{text_washer::TextWasher, UrlWasher};
 use winit::event_loop::ControlFlow;
+
 mod clipboard_poller;
+mod config;
 mod gui;
 
 const APP_NAME: &str = "UrlDebloater";
 const CLIPBOARD_PAUSE_DURATION: Duration = Duration::from_secs(30);
-const CONFIG_FILE: &str = "config.json";
 
 pub struct AppState {
     text_washer: TextWasher,
@@ -42,30 +43,6 @@ impl AppState {
 
     pub fn with_config(&self, config: AppConfig) -> Self {
         AppState::new(config)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AppConfig {
-    url_washer: UrlWasherConfig,
-    enable_clipboard_patcher: bool,
-    #[serde(
-        serialize_with = "serialize_pause_instant",
-        deserialize_with = "deserialize_pause_instant"
-    )]
-    clipboard_patcher_paused_until: Option<Instant>,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            url_washer: UrlWasherConfig {
-                mixer_instance: None,
-                tiktok_policy: urlwasher::RedirectWashPolicy::Locally,
-            },
-            enable_clipboard_patcher: true,
-            clipboard_patcher_paused_until: None,
-        }
     }
 }
 
@@ -105,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
     debug!("Hello, world!");
 
-    let config = load_config().await.unwrap_or_else(|err| {
+    let config = config::from_file().await.unwrap_or_else(|err| {
         error!("Could not read config file: {err:?}. Using default...");
         AppConfig::default()
     });
@@ -122,8 +99,8 @@ async fn persist_config(mut state_rx: watch::Receiver<Arc<AppState>>) {
             return;
         };
         match {
-            let config = &state_rx.borrow_and_update().config;
-            save_config(config)
+            let app_config = &state_rx.borrow_and_update().config;
+            config::save_to_file(app_config)
         }
         .await
         {
@@ -131,21 +108,6 @@ async fn persist_config(mut state_rx: watch::Receiver<Arc<AppState>>) {
             Err(err) => error!("Could not save config: {err:?}"),
         };
         sleep(Duration::from_secs(1)).await; // throttle
-    }
-}
-
-async fn load_config() -> anyhow::Result<AppConfig> {
-    let bytes = fs::read(CONFIG_FILE).await.context("read file")?;
-    let config = serde_json::from_slice(&bytes).context("deserialize config")?;
-    Ok(config)
-}
-
-fn save_config(config: &AppConfig) -> impl Future<Output = anyhow::Result<()>> {
-    let serialized = serde_json::to_vec_pretty(config);
-    async move {
-        fs::write(CONFIG_FILE, serialized.context("serialize config")?)
-            .await
-            .context("write config")
     }
 }
 
@@ -325,23 +287,4 @@ async fn tray_wash_clipboard(app_state: &AppState) -> anyhow::Result<()> {
         .set_text(app_state.text_washer.wash(&clipboard_text).await)
         .context("Could not copy clean text to clipboard")?;
     Ok(())
-}
-
-pub fn serialize_pause_instant<S>(
-    paused_until: &Option<Instant>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let duration_left = paused_until.map(|i| i.duration_since(Instant::now()));
-    duration_left.serialize(serializer)
-}
-
-pub fn deserialize_pause_instant<'de, D>(deserializer: D) -> Result<Option<Instant>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let duration_left = Option::<Duration>::deserialize(deserializer)?;
-    Ok(duration_left.map(|duration| Instant::now().add(duration)))
 }
