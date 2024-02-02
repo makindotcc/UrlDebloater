@@ -53,7 +53,7 @@ impl ConfigWindow {
         };
         drop(app_state);
         Self {
-            hide: false,
+            hide: true,
             ui_config_state,
             app_state_flow,
         }
