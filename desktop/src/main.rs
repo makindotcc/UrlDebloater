@@ -1,11 +1,15 @@
-use std::{sync::Arc, time::Duration};
-
+use crate::{
+    clipboard_poller::ClipboardPoller,
+    gui::{ConfigWindow, TrayMenu},
+};
 use anyhow::Context;
 use eframe::{egui, DetachedResult};
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{stream::FuturesUnordered, Future, StreamExt};
 use notify_rust::Notification;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{ops::Add, sync::Arc, time::Duration};
 use tokio::{
-    select,
+    fs, select,
     sync::watch,
     time::{sleep, sleep_until, Instant},
 };
@@ -14,17 +18,12 @@ use tracing_subscriber::EnvFilter;
 use tray_icon::menu::MenuEvent;
 use urlwasher::{text_washer::TextWasher, UrlWasher, UrlWasherConfig};
 use winit::event_loop::ControlFlow;
-
-use crate::{
-    clipboard_poller::ClipboardPoller,
-    gui::{ConfigWindow, TrayMenu},
-};
-
 mod clipboard_poller;
 mod gui;
 
 const APP_NAME: &str = "UrlDebloater";
 const CLIPBOARD_PAUSE_DURATION: Duration = Duration::from_secs(30);
+const CONFIG_FILE: &str = "config.json";
 
 pub struct AppState {
     text_washer: TextWasher,
@@ -46,11 +45,28 @@ impl AppState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppConfig {
     url_washer: UrlWasherConfig,
     enable_clipboard_patcher: bool,
+    #[serde(
+        serialize_with = "serialize_pause_instant",
+        deserialize_with = "deserialize_pause_instant"
+    )]
     clipboard_patcher_paused_until: Option<Instant>,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            url_washer: UrlWasherConfig {
+                mixer_instance: None,
+                tiktok_policy: urlwasher::RedirectWashPolicy::Locally,
+            },
+            enable_clipboard_patcher: true,
+            clipboard_patcher_paused_until: None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -89,18 +105,48 @@ async fn main() -> anyhow::Result<()> {
         .init();
     debug!("Hello, world!");
 
-    let config = AppConfig {
-        url_washer: UrlWasherConfig {
-            mixer_instance: None,
-            tiktok_policy: urlwasher::RedirectWashPolicy::Locally,
-        },
-        enable_clipboard_patcher: true,
-        clipboard_patcher_paused_until: None,
-    };
+    let config = load_config().await.unwrap_or_else(|err| {
+        error!("Could not read config file: {err:?}. Using default...");
+        AppConfig::default()
+    });
     let app_state = AppState::new(config);
     let app_state_flow = AppStateFlow::new(app_state);
+    tokio::spawn(persist_config(app_state_flow.rx.clone()));
     tokio::spawn(run_background_jobs_supervisor(app_state_flow.rx.clone()));
     run_gui(app_state_flow);
+}
+
+async fn persist_config(mut state_rx: watch::Receiver<Arc<AppState>>) {
+    loop {
+        if state_rx.changed().await.is_err() {
+            return;
+        };
+        match {
+            let config = &state_rx.borrow_and_update().config;
+            save_config(config)
+        }
+        .await
+        {
+            Ok(_) => debug!("Saved config file."),
+            Err(err) => error!("Could not save config: {err:?}"),
+        };
+        sleep(Duration::from_secs(1)).await; // throttle
+    }
+}
+
+async fn load_config() -> anyhow::Result<AppConfig> {
+    let bytes = fs::read(CONFIG_FILE).await.context("read file")?;
+    let config = serde_json::from_slice(&bytes).context("deserialize config")?;
+    Ok(config)
+}
+
+fn save_config(config: &AppConfig) -> impl Future<Output = anyhow::Result<()>> {
+    let serialized = serde_json::to_vec_pretty(config);
+    async move {
+        fs::write(CONFIG_FILE, serialized.context("serialize config")?)
+            .await
+            .context("write config")
+    }
 }
 
 async fn run_background_jobs_supervisor(mut state_rx: watch::Receiver<Arc<AppState>>) {
@@ -240,23 +286,30 @@ fn update_tray_state(tray_menu: &TrayMenu, app_state: &AppState) {
     tray_menu
         .pause_clipboard_washer
         .set_enabled(app_state.config.enable_clipboard_patcher);
-    let new_text;
-    match app_state.config.clipboard_patcher_paused_until {
-        Some(paused_until) if paused_until > Instant::now() => {
-            tray_menu.pause_clipboard_washer.set_checked(true);
-            new_text = format!(
-                "Clipboard debloater paused for {} sec.",
-                paused_until.duration_since(Instant::now()).as_secs()
-            )
+    let (active, new_text) = if app_state.config.enable_clipboard_patcher {
+        match app_state.config.clipboard_patcher_paused_until {
+            Some(paused_until) if paused_until > Instant::now() => (
+                true,
+                format!(
+                    "Clipboard debloater paused for {} sec.",
+                    paused_until.duration_since(Instant::now()).as_secs()
+                ),
+            ),
+            _ => (
+                false,
+                format!(
+                    "Pause clipboard debloater for {} sec.",
+                    CLIPBOARD_PAUSE_DURATION.as_secs()
+                ),
+            ),
         }
-        _ => {
-            tray_menu.pause_clipboard_washer.set_checked(false);
-            new_text = format!(
-                "Pause clipboard debloater for {} sec.",
-                CLIPBOARD_PAUSE_DURATION.as_secs()
-            )
-        }
-    }
+    } else {
+        (
+            false,
+            String::from("Clipboard debloater disabled in config"),
+        )
+    };
+    tray_menu.pause_clipboard_washer.set_checked(active);
     // check if changed, because too frequent changes causes text blinking (on windows at least)
     if tray_menu.pause_clipboard_washer.text() != new_text {
         tray_menu.pause_clipboard_washer.set_text(new_text);
@@ -272,4 +325,23 @@ async fn tray_wash_clipboard(app_state: &AppState) -> anyhow::Result<()> {
         .set_text(app_state.text_washer.wash(&clipboard_text).await)
         .context("Could not copy clean text to clipboard")?;
     Ok(())
+}
+
+pub fn serialize_pause_instant<S>(
+    paused_until: &Option<Instant>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let duration_left = paused_until.map(|i| i.duration_since(Instant::now()));
+    duration_left.serialize(serializer)
+}
+
+pub fn deserialize_pause_instant<'de, D>(deserializer: D) -> Result<Option<Instant>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let duration_left = Option::<Duration>::deserialize(deserializer)?;
+    Ok(duration_left.map(|duration| Instant::now().add(duration)))
 }

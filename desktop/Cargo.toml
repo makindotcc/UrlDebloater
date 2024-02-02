@@ -18,3 +18,5 @@ eframe = { git = "https://github.com/rockisch/egui", branch = "run-detached" }
 url = "2.5"
 futures = "0.3.30"
 notify-rust = "4.10.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.113"
