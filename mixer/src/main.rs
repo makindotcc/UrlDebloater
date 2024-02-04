@@ -15,7 +15,6 @@ use tower::ServiceBuilder;
 use tower_governor::key_extractor::SmartIpKeyExtractor;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorError, GovernorLayer};
 use tower_http::trace::TraceLayer;
-use tower_http::ServiceBuilderExt;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -73,8 +72,7 @@ fn app(rate_limit: bool) -> Router {
                     })
                 } else {
                     None
-                })
-                .compression(),
+                }),
         )
         .with_state(Arc::new(url_washer))
 }

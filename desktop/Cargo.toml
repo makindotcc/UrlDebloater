@@ -2,16 +2,18 @@
 name = "urldebloater"
 version = "0.1.0"
 edition = "2021"
+description = "An url debloater."
+authors = ["makindotcc"]
 
 [dependencies]
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.35", features = ["macros", "rt-multi-thread", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 arboard = "3.3.0"
 anyhow = "1.0"
 urlwasher = { path = "../urlwasher" }
 glutin = "0.31"
-tray-icon = "0.11.1"
+tray-icon = { version = "0.11.1", default-features = false }
 image = "0.24"
 winit = "0.28"
 eframe = { git = "https://github.com/rockisch/egui", branch = "run-detached" }

@@ -4,21 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.35", features = ["full"] }
+tokio = { version = "1.36", features = ["macros", "rt-multi-thread"] }
 url = "2.5"
 reqwest = "0.11"
 anyhow = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 axum = "0.7"
-tower_governor = "0.2.0"
+tower_governor = "0.3"
 tower = { version = "0.4.13", features = ["timeout"] }
-tower-http = { version = "0.5", features = [
-    "trace",
-    "compression-gzip",
-    "util",
-] }
+tower-http = { version = "0.5", features = ["trace", "util"] }
 serde = { version = "1.0", features = ["derive"] }
 urlwasher = { path = "../urlwasher" }
-axum-macros = "0.4.0"
+axum-macros = "0.4"
 http-body-util = "0.1"
