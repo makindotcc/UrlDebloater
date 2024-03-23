@@ -3,10 +3,11 @@
 Remove tracking params from URLs.
 
 ### Supported websites
-- Youtube (clears url query params)
+- Youtube & Youtube music (clears url query params)
 - Twitter (clears url query params)
 - TikTok (unshorts vm.tiktok.com links)
 - Soundcloud (unshorts on.soundcloud.com links)
+- Spotify (clears url query params on open.spotify.com)
 
 ### Features
 - automatically extract links from clipboard
@@ -16,7 +17,6 @@ Remove tracking params from URLs.
 - gui configuration
 
 ### Todo
-- installer
 - act as default http url scheme handler, so opened link from non-browser program will be proxied through debloater before opening it in browser of your choice.
 - optional [ClearURLs](https://docs.clearurls.xyz/) database support
 
