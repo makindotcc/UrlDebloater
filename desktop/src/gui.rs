@@ -24,6 +24,7 @@ struct UiConfigState {
     mixer_instance: String,
     redirect_policy: HashMap<RuleName, RedirectWashPolicy>,
     enable_clipboard_patcher: bool,
+    auto_start: bool,
 }
 
 fn apply_ui_config(app_config: &mut AppConfig, ui_config: &UiConfigState) {
@@ -46,10 +47,15 @@ impl ConfigWindow {
             .as_ref()
             .map(|url| url.to_string())
             .unwrap_or_default();
+        let auto_start = app_state
+            .auto_launch
+            .is_enabled()
+            .expect("Could not check if autostart is enabled");
         let ui_config_state = UiConfigState {
             mixer_instance,
             redirect_policy: config.url_washer.redirect_policy.clone(),
-            enable_clipboard_patcher: true,
+            enable_clipboard_patcher: config.enable_clipboard_patcher,
+            auto_start,
         };
         drop(app_state);
         Self {
@@ -71,6 +77,14 @@ impl eframe::App for ConfigWindow {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Desktop settings");
             ui.checkbox(&mut self.ui_config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
+            if ui.checkbox(&mut self.ui_config_state.auto_start, "Start debloater with system startup").clicked() {
+                let auto_launch = &self.app_state_flow.current().auto_launch;
+                if self.ui_config_state.auto_start {
+                    auto_launch.enable().expect("Could not enable auto start");
+                } else {
+                    auto_launch.disable().expect("Could not disable auto start");
+                }
+            }
 
             ui.separator();
             {

@@ -7,10 +7,12 @@ use crate::{
     gui::{ConfigWindow, TrayMenu},
 };
 use anyhow::Context;
+use auto_launch::AutoLaunch;
 use config::AppConfig;
 use eframe::{egui, DetachedResult};
 use futures::{stream::FuturesUnordered, StreamExt};
 use notify_rust::Notification;
+use std::env;
 use std::{
     io::{self, ErrorKind},
     sync::Arc,
@@ -37,20 +39,18 @@ const CLIPBOARD_PAUSE_DURATION: Duration = Duration::from_secs(30);
 pub struct AppState {
     text_washer: TextWasher,
     config: AppConfig,
+    auto_launch: AutoLaunch,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new(config: AppConfig, auto_launch: AutoLaunch) -> Self {
         Self {
             text_washer: TextWasher {
                 url_washer: UrlWasher::new(config.url_washer.clone()),
             },
             config,
+            auto_launch,
         }
-    }
-
-    pub fn with_config(&self, config: AppConfig) -> Self {
-        AppState::new(config)
     }
 }
 
@@ -74,9 +74,15 @@ impl AppStateFlow {
     }
 
     pub fn modify_config(&self, apply_changes: impl FnOnce(&mut AppConfig)) {
-        let mut new_config = self.current().config.clone();
+        let (auto_launch, config) = {
+            let current = self.current();
+            (current.auto_launch.clone(), current.config.clone())
+        };
+        let mut new_config = config.clone();
         apply_changes(&mut new_config);
-        let _ = self.tx.send(Arc::new(AppState::new(new_config)));
+        let _ = self
+            .tx
+            .send(Arc::new(AppState::new(new_config, auto_launch)));
     }
 }
 
@@ -90,16 +96,29 @@ async fn main() -> anyhow::Result<()> {
         .init();
     debug!("Hello, world!");
 
-    let config = config::from_file().await.unwrap_or_else(|err| {
-        if !err
-            .downcast_ref::<io::Error>()
-            .is_some_and(|err| err.kind() == ErrorKind::NotFound)
-        {
-            error!("Could not read config file: {err:?}. Using default...");
-        }
-        AppConfig::default()
-    });
-    let app_state = AppState::new(config);
+    let (first_launch, config) = config::from_file()
+        .await
+        .map(|config| (false, config))
+        .unwrap_or_else(|err| {
+            let config_not_found = err
+                .downcast_ref::<io::Error>()
+                .is_some_and(|err| err.kind() == ErrorKind::NotFound);
+            if !config_not_found {
+                error!("Could not read config file: {err:?}. Using default...");
+            }
+            (config_not_found, AppConfig::default())
+        });
+    let auto_launch = {
+        let app_path = env::current_exe().expect("Could not get current exe path");
+        let app_path = app_path.to_str().expect("Invalid current exe path");
+        AutoLaunch::new(APP_NAME, app_path, &[] as &[&str])
+    };
+    if first_launch {
+        auto_launch
+            .enable()
+            .expect("Could not enable auto launch on initial debloater startup");
+    }
+    let app_state = AppState::new(config, auto_launch);
     let app_state_flow = AppStateFlow::new(app_state);
     tokio::spawn(persist_config(app_state_flow.rx.clone()));
     tokio::spawn(run_background_jobs_supervisor(app_state_flow.rx.clone()));
