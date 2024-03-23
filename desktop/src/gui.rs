@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use eframe::egui;
-use tracing::debug;
+use notify_rust::Notification;
+use tracing::{debug, error};
 use tray_icon::{
     menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     TrayIcon, TrayIconBuilder,
@@ -38,7 +39,7 @@ fn apply_ui_config(app_config: &mut AppConfig, ui_config: &UiConfigState) {
 }
 
 impl ConfigWindow {
-    pub fn new(app_state_flow: AppStateFlow) -> Self {
+    pub fn new(app_state_flow: AppStateFlow, open_config_window: bool) -> Self {
         let app_state = app_state_flow.current();
         let config = &app_state.config;
         let mixer_instance = config
@@ -59,7 +60,7 @@ impl ConfigWindow {
         };
         drop(app_state);
         Self {
-            hide: true,
+            hide: !open_config_window,
             ui_config_state,
             app_state_flow,
         }
@@ -143,6 +144,14 @@ impl eframe::App for ConfigWindow {
 
     fn on_close_event(&mut self) -> bool {
         self.hide = true;
+        if let Err(err) = Notification::new()
+            .appname(APP_NAME)
+            .summary(APP_NAME)
+            .body("Minimized to tray icon :)")
+            .show()
+        {
+            error!("Could not show error notification: {err}");
+        }
         false
     }
 }

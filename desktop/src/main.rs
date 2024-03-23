@@ -86,6 +86,8 @@ impl AppStateFlow {
     }
 }
 
+const AUTOSTART_ARG: &str = "-autostart";
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -96,6 +98,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
     debug!("Hello, world!");
 
+    let started_from_autolaunch = env::args().skip(1).next() == Some(String::from(AUTOSTART_ARG));
     let (first_launch, config) = config::from_file()
         .await
         .map(|config| (false, config))
@@ -111,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
     let auto_launch = {
         let app_path = env::current_exe().expect("Could not get current exe path");
         let app_path = app_path.to_str().expect("Invalid current exe path");
-        AutoLaunch::new(APP_NAME, app_path, &[] as &[&str])
+        AutoLaunch::new(APP_NAME, app_path, &[AUTOSTART_ARG] as &[&str])
     };
     if first_launch {
         auto_launch
@@ -122,7 +125,8 @@ async fn main() -> anyhow::Result<()> {
     let app_state_flow = AppStateFlow::new(app_state);
     tokio::spawn(persist_config(app_state_flow.rx.clone()));
     tokio::spawn(run_background_jobs_supervisor(app_state_flow.rx.clone()));
-    run_gui(app_state_flow);
+    let open_config_window = !started_from_autolaunch;
+    run_gui(app_state_flow, open_config_window);
 }
 
 async fn persist_config(mut state_rx: watch::Receiver<Arc<AppState>>) {
@@ -207,7 +211,7 @@ async fn run_clipboard_patcher(text_washer: &TextWasher) -> anyhow::Result<()> {
     }
 }
 
-fn run_gui(app_state_flow: AppStateFlow) -> ! {
+fn run_gui(app_state_flow: AppStateFlow, open_config_window: bool) -> ! {
     let (tray_event_tx, mut tray_event_rx) = mpsc::channel(10);
     #[cfg(target_os = "linux")]
     {
@@ -236,7 +240,7 @@ fn run_gui(app_state_flow: AppStateFlow) -> ! {
         },
         Box::new({
             let app_state_flow = app_state_flow.clone();
-            |_cc| Box::new(ConfigWindow::new(app_state_flow))
+            move |_cc| Box::new(ConfigWindow::new(app_state_flow, open_config_window))
         }),
     );
 
