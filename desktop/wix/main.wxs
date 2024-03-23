@@ -65,7 +65,6 @@
     Language='1033'
     Codepage='1252'
     Version='$(var.Version)'>
-
     <Package Id='*'
       Keywords='Installer'
       Description='An url debloater.'
@@ -73,7 +72,7 @@
       InstallerVersion='450'
       Languages='1033'
       Compressed='yes'
-      InstallScope='perMachine'
+      InstallScope='perUser'
       SummaryCodepage='1252'
     />
 
@@ -85,18 +84,22 @@
     <Property Id='DiskPrompt' Value='urldebloater Installation' />
 
     <Directory Id='TARGETDIR' Name='SourceDir'>
-      <Directory Id='$(var.PlatformProgramFilesFolder)' Name='PFiles'>
-        <Directory Id='APPLICATIONFOLDER' Name='urldebloater'>
-          <Directory Id='Bin' Name='bin'>
-            <Component Id='binary0' Guid='*'>
-              <File
-                Id='exe0'
-                Name='urldebloater.exe'
-                DiskId='1'
-                Source='$(var.CargoTargetBinDir)\urldebloater.exe'
-                KeyPath='yes' />
-            </Component>
-          </Directory>
+      <Directory Id='LocalAppDataFolder'>
+        <Directory Id='APPLICATIONFOLDER' Name='UrlDebloater'>
+          <Component Id='binary0' Guid='603e6400-eba9-42e1-9163-0b9a29e42c87'>
+            <CreateFolder />
+            <RemoveFile Id="RemoveConfigFile" Directory="APPLICATIONFOLDER" Name="config.json"
+              On="uninstall" />
+            <RemoveFolder Id="RemoveAppFolder" Directory="APPLICATIONFOLDER" On="uninstall" />
+            <RegistryKey Root="HKCU" Key="Software/makin/UrlDebloater">
+              <RegistryValue Name="UrlDebloaterExe" Value="1" KeyPath="yes" Type="integer" />
+            </RegistryKey>
+            <File
+              Id='exe0'
+              Name='urldebloater.exe'
+              DiskId='1'
+              Source='$(var.CargoTargetBinDir)\urldebloater.exe' />
+          </Component>
         </Directory>
       </Directory>
 
@@ -110,8 +113,8 @@
         <Shortcut Id="ApplicationStartMenuShortcut"
           Name="UrlDebloater"
           Description="An url debloater."
-          Target="[APPLICATIONFOLDER]bin\urldebloater.exe"
-          WorkingDirectory="APPLICATIONROOTDIRECTORY" />
+          Target="[APPLICATIONFOLDER]\urldebloater.exe"
+          WorkingDirectory="APPLICATIONFOLDER" />
         <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\makin\UrlDebloater" Name="installed"
           Type="integer" Value="1" KeyPath="yes" />
