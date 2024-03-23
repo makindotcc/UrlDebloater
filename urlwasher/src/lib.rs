@@ -60,6 +60,12 @@ pub fn rule_set() -> &'static Vec<DirtyUrlRule> {
                 ],
                 ..Default::default()
             },
+            DirtyUrlRule {
+                name: "open.spotify.com".to_string(),
+                domains: vec!["open.spotify.com".to_string()],
+                washing_programs: vec![WashingProgram::remove_some_params(&["si"])],
+                ..Default::default()
+            },
         ]
     })
 }
