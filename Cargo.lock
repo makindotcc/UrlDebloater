@@ -4220,7 +4220,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "arboard",
@@ -4246,7 +4246,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-mixer"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "axum",
