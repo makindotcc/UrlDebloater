@@ -34,6 +34,7 @@ pub fn rule_set() -> &'static Vec<DirtyUrlRule> {
                 washing_programs: vec![WashingProgram::remove_some_params(&["si"])],
                 ..Default::default()
             },
+            #[warn(clippy::needless_update)]
             DirtyUrlRule {
                 name: "twitter.com".to_string(),
                 domains: vec!["twitter.com".to_string(), "x.com".to_string()],
@@ -92,7 +93,7 @@ impl UrlWasher {
         if url.scheme() != "http" && url.scheme() != "https" {
             return Ok(None);
         }
-        if let Some(cached) = self.cache.lock().await.get(&url) {
+        if let Some(cached) = self.cache.lock().await.get(url) {
             debug!("Serving washed url {} from cache.", url.to_string());
             return Ok(Some(cached.to_owned()));
         }
@@ -129,7 +130,7 @@ impl UrlWasher {
                         Err(err) => return Err(err),
                     }
                 }
-                WashingProgram::RemoveSomeParams(params) => remove_query_params(&laundry, &params),
+                WashingProgram::RemoveSomeParams(params) => remove_query_params(&laundry, params),
                 WashingProgram::RemoveAllParams => {
                     laundry.set_query(None);
                     laundry
@@ -165,7 +166,7 @@ async fn resolve_redirect(
     mixer_instance: &Option<Url>,
 ) -> anyhow::Result<Result<Url, Url>> {
     match policy {
-        RedirectWashPolicy::Ignore => return Ok(Err(url)),
+        RedirectWashPolicy::Ignore => Ok(Err(url)),
         RedirectWashPolicy::Locally => {
             let resp = http_client.get(url).send().await?;
             let location = resp
@@ -251,6 +252,7 @@ impl Display for RedirectWashPolicy {
 }
 
 #[derive(Default)]
+#[non_exhaustive]
 pub struct DirtyUrlRule {
     pub name: String,
     pub domains: Vec<String>,
@@ -291,7 +293,7 @@ pub enum WashingProgram {
 
 impl WashingProgram {
     pub fn remove_some_params(values: &[&str]) -> Self {
-        Self::RemoveSomeParams(values.into_iter().map(|s| String::from(*s)).collect())
+        Self::RemoveSomeParams(values.iter().map(|s| String::from(*s)).collect())
     }
 }
 

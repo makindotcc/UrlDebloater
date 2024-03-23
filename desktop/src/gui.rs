@@ -107,7 +107,7 @@ impl eframe::App for ConfigWindow {
                             self.ui_config_state.redirect_policy.entry(rule.name.clone()).or_insert(RedirectWashPolicy::Ignore)
                         },
                     };
-                    
+
                     egui::ComboBox::from_label(rule.domains.join(", "))
                         .selected_text(policy.to_string())
                         .show_ui(ui, |ui| {
