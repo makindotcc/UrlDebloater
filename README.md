@@ -27,6 +27,12 @@ There is possibility to use [mixer](mixer) (a web server exposing endpoint to un
 
 ### Showcase
 
+Configuration window:\
+![Configuration window](https://github.com/makindotcc/UrlDebloater/assets/9150636/6d482e02-b4f7-4990-b096-24fc62799a8a)
+
+Tray context menu:\
+![tray context menu](https://github.com/makindotcc/UrlDebloater/assets/9150636/63090379-fe8f-44c7-bcb0-e2796026366b)
+
 https://github.com/makindotcc/UrlDebloater/assets/9150636/12d83dd8-9c60-4ada-94be-11afbf2ba260
 
 # Mobile platforms plans
