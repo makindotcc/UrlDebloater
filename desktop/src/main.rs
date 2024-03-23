@@ -1,3 +1,7 @@
+#![cfg_attr(
+    all(target_os = "windows", not(feature = "console")),
+    windows_subsystem = "windows"
+)]
 use crate::{
     clipboard_poller::ClipboardPoller,
     gui::{ConfigWindow, TrayMenu},
