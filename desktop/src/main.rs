@@ -284,11 +284,42 @@ fn run_gui(app_state_flow: AppStateFlow, open_config_window: bool) -> ! {
             }
         }
 
+        // since some windows/nvidia driver update detached_app.on_event started draining cpu a LOT
+        // so this is temporary workaround to stop calling it when window is not visible
+        // it's still using too much cpu when window is visible, but it might be solved with
+        // updating egui (didn't tested that), but unfortunately we are using egui fork with detached
+        // event loop which it's a bit outdated. Maybe some day after some software update it will be back functioning normally.
+        //
+        // Profiler stack:
+        // Function Name	Total CPU [unit, %]	Self CPU [unit, %]	Module	Category
+        // Function Name   Total CPU [unit, %]     Self CPU [unit, %]      Module  Category
+        // ||||||||||||||||||||||||||||||||||||||||||| + urldebloater::run_gui::closure$1  1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
+        // |||||||||||||||||||||||||||||||||||||||||||| + eframe::native::run::impl$2::on_event<eframe::native::run::glow_integration::GlowWinitApp>       1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
+        // ||||||||||||||||||||||||||||||||||||||||||||| + eframe::native::run::DetachedRunner<eframe::native::run::glow_integration::GlowWinitApp>::on_event_internal<eframe::native::run::glow_integration::GlowWinitApp>        1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
+        // |||||||||||||||||||||||||||||||||||||||||||||| + eframe::native::run::glow_integration::impl$2::run_ui_and_paint        1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
+        // ||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::painter::Painter::paint_and_update_textures        1157 (20,47%)   0 (0,00%)       urldebloater
+        // |||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::painter::Painter::paint_primitives        1157 (20,47%)   0 (0,00%)       urldebloater
+        // ||||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::painter::Painter::prepare_painting       1151 (20,36%)   0 (0,00%)       urldebloater
+        // |||||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::check_for_gl_error_impl 1150 (20,35%)   0 (0,00%)       urldebloater
+        // ||||||||||||||||||||||||||||||||||||||||||||||||||| + glow::native::impl$2::get_error   1150 (20,35%)   0 (0,00%)       urldebloater
+        // |||||||||||||||||||||||||||||||||||||||||||||||||||| + glow::gl46::struct_commands::GlFns::GetError     1150 (20,35%)   0 (0,00%)       urldebloater
+        // ||||||||||||||||||||||||||||||||||||||||||||||||||||| - [External Call] nvoglv64.dll!0x00007ffee03348ec 1150 (20,35%)   1150 (20,35%)   nvoglv64
+        if matches!(event, winit::event::Event::RedrawEventsCleared) {
+            let window_visible = detached_app
+                .window()
+                .and_then(|window| window.is_visible())
+                .unwrap_or(false);
+            if !window_visible {
+                *control_flow =
+                    ControlFlow::WaitUntil(std::time::Instant::now() + Duration::from_millis(200));
+                return;
+            }
+        };
         *control_flow = match detached_app.on_event(&event, event_loop).unwrap() {
             DetachedResult::Exit => ControlFlow::Exit,
             DetachedResult::UpdateNext => ControlFlow::Poll,
             DetachedResult::UpdateAt(next_paint) => {
-                let max_next_paint = std::time::Instant::now() + Duration::from_millis(200);
+                let max_next_paint = std::time::Instant::now() + Duration::from_millis(500);
                 ControlFlow::WaitUntil(if next_paint > max_next_paint {
                     max_next_paint
                 } else {
