@@ -31,7 +31,8 @@ async fn main() {
         .with_file(false)
         .init();
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:7777")
+    let bind_addr = std::env::var("LISTEN_ADDRESS").unwrap_or_else(|_| "127.0.0.1:7777".into());
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
         .expect("Could not bind tcp listener");
     info!("Starting listening...");
