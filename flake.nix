@@ -65,7 +65,7 @@
               startLimitIntervalSec = 120;
               startLimitBurst = 5;
               serviceConfig = {
-                ExecStart = "${self.packages.${pkgs.system}.default}/bin/urldebloater-mixer";
+                ExecStart = "${self.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/urldebloater-mixer";
                 Restart = "on-failure";
                 RestartSec = "5s";
                 User = serviceName;
