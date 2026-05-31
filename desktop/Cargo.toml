@@ -6,22 +6,22 @@ description = "An url debloater."
 authors = ["makindotcc"]
 
 [dependencies]
-tokio = { version = "1.35", features = ["macros", "rt-multi-thread", "fs"] }
+tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-arboard = "3.3.0"
+arboard = "3.6"
 anyhow = "1.0"
 urlwasher = { path = "../urlwasher" }
 glutin = "0.31"
-tray-icon = { version = "0.11.1", default-features = false }
+tray-icon = { version = "0.11.3", default-features = false }
 image = "0.24"
 winit = "0.28"
 eframe = { git = "https://github.com/rockisch/egui", branch = "run-detached" }
 url = "2.5"
-futures = "0.3.30"
-notify-rust = "4.10.0"
+futures = "0.3.32"
+notify-rust = "4.17.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.113"
+serde_json = "1.0.150"
 auto-launch = "0.5"
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -29,7 +29,7 @@ gtk = "0.18"
 glib = "0.18"
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
-embed-resource = "2.4.2"
+embed-resource = "2.5.2"
 
 [features]
 console = []

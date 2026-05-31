@@ -11,6 +11,7 @@ use axum::{
 use axum_macros::debug_handler;
 use error::{AppResult, UserError};
 use serde::Deserialize;
+use tower::util::option_layer;
 use tower::ServiceBuilder;
 use tower_governor::key_extractor::SmartIpKeyExtractor;
 use tower_governor::{governor::GovernorConfigBuilder, GovernorError, GovernorLayer};
@@ -60,7 +61,7 @@ fn app(rate_limit: bool) -> Router {
                 .layer(TraceLayer::new_for_http())
                 .layer(HandleErrorLayer::new(handle_service_err))
                 .timeout(Duration::from_secs(10))
-                .option_layer(if rate_limit {
+                .layer(option_layer(if rate_limit {
                     Some(GovernorLayer {
                         config: Box::leak(Box::new(
                             GovernorConfigBuilder::default()
@@ -73,7 +74,7 @@ fn app(rate_limit: bool) -> Router {
                     })
                 } else {
                     None
-                }),
+                })),
         )
         .with_state(Arc::new(url_washer))
 }
