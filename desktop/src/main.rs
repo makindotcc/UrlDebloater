@@ -2,17 +2,16 @@
     all(target_os = "windows", not(feature = "console")),
     windows_subsystem = "windows"
 )]
-use crate::{
-    clipboard_poller::ClipboardPoller,
-    gui::{ConfigWindow, TrayMenu},
-};
+#[cfg(target_os = "linux")]
+use crate::gui::ConfigWindow;
+use crate::{clipboard_poller::ClipboardPoller, gui::TrayMenu};
 use anyhow::Context;
 use auto_launch::AutoLaunch;
 use config::AppConfig;
-use eframe::{egui, DetachedResult};
 use futures::{stream::FuturesUnordered, StreamExt};
-use notify_rust::Notification;
 use std::env;
+#[cfg(target_os = "linux")]
+use std::{cell::RefCell, rc::Rc};
 use std::{
     io::{self, ErrorKind},
     sync::Arc,
@@ -27,7 +26,6 @@ use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 use tray_icon::menu::MenuEvent;
 use urlwasher::{text_washer::TextWasher, UrlWasher};
-use winit::event_loop::ControlFlow;
 
 mod clipboard_poller;
 mod config;
@@ -88,7 +86,7 @@ impl AppStateFlow {
 
 const AUTOSTART_ARG: &str = "-autostart";
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread", worker_threads = 1)]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
@@ -213,121 +211,98 @@ async fn run_clipboard_patcher(text_washer: &TextWasher) -> anyhow::Result<()> {
 
 fn run_gui(app_state_flow: AppStateFlow, open_config_window: bool) -> ! {
     let (tray_event_tx, mut tray_event_rx) = mpsc::channel(10);
+
     #[cfg(target_os = "linux")]
     {
-        let app_state_flow = app_state_flow.clone();
-        std::thread::spawn(move || {
-            gtk::init().unwrap();
+        gtk::init().unwrap();
 
-            let mut tray_handler = TrayHandler::new(app_state_flow, tray_event_tx);
-            glib::timeout_add_local(Duration::from_millis(100), move || {
-                tray_handler.update();
-                glib::ControlFlow::Continue
-            });
-            gtk::main();
-        });
-    }
-    #[cfg(not(target_os = "linux"))]
-    let mut tray_handler = TrayHandler::new(app_state_flow.clone(), tray_event_tx);
-
-    let event_loop = eframe::EventLoopBuilder::<eframe::UserEvent>::with_user_event().build();
-    let mut detached_app = eframe::run_detached_native(
-        APP_NAME,
-        &event_loop,
-        eframe::NativeOptions {
-            initial_window_size: Some(egui::vec2(620.0, 340.0)),
-            ..Default::default()
-        },
-        Box::new({
-            let app_state_flow = app_state_flow.clone();
-            move |_cc| Box::new(ConfigWindow::new(app_state_flow, open_config_window))
-        }),
-    );
-
-    event_loop.run(move |event, event_loop, control_flow| {
-        #[cfg(not(target_os = "linux"))]
-        tray_handler.update();
-
-        while let Ok(tray_event) = tray_event_rx.try_recv() {
-            match tray_event {
-                TrayEvent::OpenConfig => {
-                    if let Some(window) = detached_app.window() {
-                        window.set_visible(true);
-                    }
-                }
-                TrayEvent::WashClipboard => {
-                    info!("Debloating clipboard from tray...");
-                    let app_state = app_state_flow.rx.borrow().to_owned();
-                    tokio::spawn(async move {
-                        if let Err(err) = tray_wash_clipboard(&app_state).await {
-                            error!("Could not wash clipboard from tray: {err:?}");
-                            if let Err(err) = Notification::new()
-                                .summary(APP_NAME)
-                                .body(&err.to_string())
-                                .show()
-                            {
-                                error!("Could not show error notification: {err}");
-                            }
-                        }
-                    });
-                }
-                TrayEvent::PauseClipboardWasher => {
-                    app_state_flow.modify_config(|config| {
-                        if config.clipboard_patcher_paused_until.is_some() {
-                            config.clipboard_patcher_paused_until = None;
-                        } else {
-                            config.clipboard_patcher_paused_until =
-                                Some(Instant::now() + CLIPBOARD_PAUSE_DURATION);
-                        }
-                    });
-                }
-            }
+        let mut tray_handler = TrayHandler::new(app_state_flow.clone(), tray_event_tx);
+        let config_window = Rc::new(RefCell::new(None));
+        if open_config_window {
+            open_config_window_once(&app_state_flow, &config_window);
         }
 
-        // since some windows/nvidia driver update detached_app.on_event started draining cpu a LOT
-        // so this is temporary workaround to stop calling it when window is not visible
-        // it's still using too much cpu when window is visible, but it might be solved with
-        // updating egui (didn't tested that), but unfortunately we are using egui fork with detached
-        // event loop which it's a bit outdated. Maybe some day after some software update it will be back functioning normally.
-        //
-        // Profiler stack:
-        // Function Name	Total CPU [unit, %]	Self CPU [unit, %]	Module	Category
-        // Function Name   Total CPU [unit, %]     Self CPU [unit, %]      Module  Category
-        // ||||||||||||||||||||||||||||||||||||||||||| + urldebloater::run_gui::closure$1  1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
-        // |||||||||||||||||||||||||||||||||||||||||||| + eframe::native::run::impl$2::on_event<eframe::native::run::glow_integration::GlowWinitApp>       1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
-        // ||||||||||||||||||||||||||||||||||||||||||||| + eframe::native::run::DetachedRunner<eframe::native::run::glow_integration::GlowWinitApp>::on_event_internal<eframe::native::run::glow_integration::GlowWinitApp>        1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
-        // |||||||||||||||||||||||||||||||||||||||||||||| + eframe::native::run::glow_integration::impl$2::run_ui_and_paint        1189 (21,04%)   0 (0,00%)       urldebloater    UI | Graphics | Kernel | Runtime
-        // ||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::painter::Painter::paint_and_update_textures        1157 (20,47%)   0 (0,00%)       urldebloater
-        // |||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::painter::Painter::paint_primitives        1157 (20,47%)   0 (0,00%)       urldebloater
-        // ||||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::painter::Painter::prepare_painting       1151 (20,36%)   0 (0,00%)       urldebloater
-        // |||||||||||||||||||||||||||||||||||||||||||||||||| + egui_glow::check_for_gl_error_impl 1150 (20,35%)   0 (0,00%)       urldebloater
-        // ||||||||||||||||||||||||||||||||||||||||||||||||||| + glow::native::impl$2::get_error   1150 (20,35%)   0 (0,00%)       urldebloater
-        // |||||||||||||||||||||||||||||||||||||||||||||||||||| + glow::gl46::struct_commands::GlFns::GetError     1150 (20,35%)   0 (0,00%)       urldebloater
-        // ||||||||||||||||||||||||||||||||||||||||||||||||||||| - [External Call] nvoglv64.dll!0x00007ffee03348ec 1150 (20,35%)   1150 (20,35%)   nvoglv64
-        if matches!(event, winit::event::Event::RedrawEventsCleared) {
-            let window_visible = detached_app
-                .window()
-                .and_then(|window| window.is_visible())
-                .unwrap_or(false);
-            if !window_visible {
-                *control_flow =
-                    ControlFlow::WaitUntil(std::time::Instant::now() + Duration::from_millis(200));
-                return;
+        glib::timeout_add_local(Duration::from_millis(100), move || {
+            tray_handler.update();
+            process_tray_events(&app_state_flow, &config_window, &mut tray_event_rx);
+            glib::ControlFlow::Continue
+        });
+        gtk::main();
+        std::process::exit(0);
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        if open_config_window {
+            error!("Configuration window is not available on this platform yet");
+        }
+        let mut tray_handler = TrayHandler::new(app_state_flow.clone(), tray_event_tx);
+        loop {
+            tray_handler.update();
+            while let Ok(tray_event) = tray_event_rx.try_recv() {
+                process_headless_tray_event(&app_state_flow, tray_event);
             }
-        };
-        *control_flow = match detached_app.on_event(&event, event_loop).unwrap() {
-            DetachedResult::Exit => ControlFlow::Exit,
-            DetachedResult::UpdateNext => ControlFlow::Poll,
-            DetachedResult::UpdateAt(next_paint) => {
-                let max_next_paint = std::time::Instant::now() + Duration::from_millis(500);
-                ControlFlow::WaitUntil(if next_paint > max_next_paint {
-                    max_next_paint
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn process_tray_events(
+    app_state_flow: &AppStateFlow,
+    config_window: &Rc<RefCell<Option<ConfigWindow>>>,
+    tray_event_rx: &mut mpsc::Receiver<TrayEvent>,
+) {
+    while let Ok(tray_event) = tray_event_rx.try_recv() {
+        match tray_event {
+            TrayEvent::OpenConfig => open_config_window_once(app_state_flow, config_window),
+            tray_event => process_headless_tray_event(app_state_flow, tray_event),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn open_config_window_once(
+    app_state_flow: &AppStateFlow,
+    config_window: &Rc<RefCell<Option<ConfigWindow>>>,
+) {
+    let mut current_window = config_window.borrow_mut();
+    if current_window.is_none() {
+        let config_window_slot = Rc::clone(config_window);
+        *current_window = Some(ConfigWindow::new(app_state_flow.clone(), move || {
+            *config_window_slot.borrow_mut() = None;
+        }));
+    }
+    if let Some(config_window) = current_window.as_ref() {
+        config_window.show();
+    }
+}
+
+fn process_headless_tray_event(app_state_flow: &AppStateFlow, tray_event: TrayEvent) {
+    match tray_event {
+        TrayEvent::OpenConfig => {
+            error!("Configuration window is not available on this platform yet");
+        }
+        TrayEvent::WashClipboard => {
+            info!("Debloating clipboard from tray...");
+            let app_state = app_state_flow.rx.borrow().to_owned();
+            tokio::spawn(async move {
+                if let Err(err) = tray_wash_clipboard(&app_state).await {
+                    error!("Could not wash clipboard from tray: {err:?}");
+                }
+            });
+        }
+        TrayEvent::PauseClipboardWasher => {
+            app_state_flow.modify_config(|config| {
+                if config.clipboard_patcher_paused_until.is_some() {
+                    config.clipboard_patcher_paused_until = None;
                 } else {
-                    next_paint
-                })
-            }
-        };
-    });
+                    config.clipboard_patcher_paused_until =
+                        Some(Instant::now() + CLIPBOARD_PAUSE_DURATION);
+                }
+            });
+        }
+    }
 }
 
 struct TrayHandler {

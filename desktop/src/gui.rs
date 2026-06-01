@@ -1,25 +1,31 @@
+#[cfg(target_os = "linux")]
 use std::collections::HashMap;
 
-use eframe::egui;
-use notify_rust::Notification;
-use tracing::{debug, error};
+#[cfg(target_os = "linux")]
+use glib::Propagation;
+#[cfg(target_os = "linux")]
+use gtk::prelude::*;
+#[cfg(target_os = "linux")]
+use tracing::{error, warn};
 use tray_icon::{
     menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem},
     TrayIcon, TrayIconBuilder,
 };
+#[cfg(target_os = "linux")]
 use url::Url;
-use urlwasher::{
-    rule_set, RedirectWashPolicy, RuleName, UrlWasherConfig, WashingProgram, PUBLIC_MIXER_INSTANCE,
-};
+#[cfg(target_os = "linux")]
+use urlwasher::{rule_set, RedirectWashPolicy, RuleName, WashingProgram, PUBLIC_MIXER_INSTANCE};
 
-use crate::{AppConfig, AppStateFlow, APP_NAME};
+#[cfg(target_os = "linux")]
+use crate::AppStateFlow;
+use crate::APP_NAME;
 
+#[cfg(target_os = "linux")]
 pub struct ConfigWindow {
-    hide: bool,
-    ui_config_state: UiConfigState,
-    app_state_flow: AppStateFlow,
+    window: gtk::Window,
 }
 
+#[cfg(target_os = "linux")]
 #[derive(PartialEq, Eq, Clone)]
 struct UiConfigState {
     mixer_instance: String,
@@ -28,131 +34,221 @@ struct UiConfigState {
     auto_start: bool,
 }
 
-fn apply_ui_config(app_config: &mut AppConfig, ui_config: &UiConfigState) {
-    app_config.url_washer = UrlWasherConfig {
-        mixer_instance: Url::parse(&ui_config.mixer_instance)
-            .map(Some)
-            .unwrap_or(None),
-        redirect_policy: ui_config.redirect_policy.clone(),
-    };
-    app_config.enable_clipboard_patcher = ui_config.enable_clipboard_patcher;
-}
-
+#[cfg(target_os = "linux")]
 impl ConfigWindow {
-    pub fn new(app_state_flow: AppStateFlow, open_config_window: bool) -> Self {
-        let app_state = app_state_flow.current();
-        let config = &app_state.config;
-        let mixer_instance = config
-            .url_washer
-            .mixer_instance
-            .as_ref()
-            .map(|url| url.to_string())
-            .unwrap_or_default();
-        let auto_start = app_state
-            .auto_launch
-            .is_enabled()
-            .expect("Could not check if autostart is enabled");
-        let ui_config_state = UiConfigState {
-            mixer_instance,
-            redirect_policy: config.url_washer.redirect_policy.clone(),
-            enable_clipboard_patcher: config.enable_clipboard_patcher,
-            auto_start,
-        };
-        drop(app_state);
-        Self {
-            hide: !open_config_window,
-            ui_config_state,
-            app_state_flow,
-        }
-    }
-}
+    pub fn new(app_state_flow: AppStateFlow, on_close: impl Fn() + 'static) -> Self {
+        let ui_config_state = current_ui_config(&app_state_flow);
+        let window = gtk::Window::new(gtk::WindowType::Toplevel);
+        window.set_title("UrlDebloater settings");
+        window.set_default_size(620, 340);
+        window.set_border_width(16);
 
-impl eframe::App for ConfigWindow {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        if self.hide {
-            self.hide = false;
-            frame.set_visible(false);
-        }
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
+        window.add(&content);
 
-        let previous_config = self.ui_config_state.clone();
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Desktop settings");
-            ui.checkbox(&mut self.ui_config_state.enable_clipboard_patcher, "Automatically debloat URLs in your clipboard");
-            if ui.checkbox(&mut self.ui_config_state.auto_start, "Start debloater with system startup").clicked() {
-                let auto_launch = &self.app_state_flow.current().auto_launch;
-                if self.ui_config_state.auto_start {
-                    auto_launch.enable().expect("Could not enable auto start");
-                } else {
-                    auto_launch.disable().expect("Could not disable auto start");
-                }
-            }
+        let desktop_heading = heading("Desktop settings");
+        content.pack_start(&desktop_heading, false, false, 0);
 
-            ui.separator();
-            {
-                ui.heading("Per user generated links")
-                    .on_hover_text("Section for links that cannot be anonymised without requesting service server.");
-
-                ui.horizontal(|ui| {
-                    let name_label = ui
-                        .label("Mixer instance url: ")
-                        .on_hover_text("To remove tracking capabilities of short links like https://vm.tiktok.com/PerUserId \
-                        we need request target server (in this case - tiktok) to unroll it.\n\
-                        \
-                        You can do this from your local network, but there is a risk that they will catch you by correlating your IP address.\n\
-                        \n\
-                        This option allows you to resolve these links via service hosted on other network.\n\
-                        ⚠ It sends url to third party person if you don't host mixer yourself ⚠ (Not so scary for TikTok videos tho) \
-                        ");
-                    ui.text_edit_singleline(&mut self.ui_config_state.mixer_instance)
-                        .labelled_by(name_label.id);
-                    if ui.button("use public instance").clicked() {
-                        self.ui_config_state.mixer_instance = PUBLIC_MIXER_INSTANCE.to_string();
-                    }
+        let enable_clipboard =
+            gtk::CheckButton::with_label("Automatically debloat URLs in your clipboard");
+        enable_clipboard.set_active(ui_config_state.enable_clipboard_patcher);
+        content.pack_start(&enable_clipboard, false, false, 0);
+        {
+            let app_state_flow = app_state_flow.clone();
+            enable_clipboard.connect_toggled(move |checkbox| {
+                app_state_flow.modify_config(|config| {
+                    config.enable_clipboard_patcher = checkbox.is_active();
                 });
-                if !self.ui_config_state.mixer_instance.is_empty() {
-                    if let Err(err) = Url::parse(&self.ui_config_state.mixer_instance) {
-                        ui.colored_label(ui.visuals().error_fg_color, format!("Invalid url: {err}"));
-                    }
-                }
-
-                for rule in rule_set().iter().filter(|rule| rule.washing_programs.contains(&WashingProgram::ResolveRedirection)) {
-                    let policy = match self.ui_config_state.redirect_policy.get_mut(&rule.name) {
-                        Some(policy) => policy,
-                        None => {
-                            self.ui_config_state.redirect_policy.entry(rule.name.clone()).or_insert(RedirectWashPolicy::Ignore)
-                        },
-                    };
-
-                    egui::ComboBox::from_label(rule.domains.join(", "))
-                        .selected_text(policy.to_string())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(policy, RedirectWashPolicy::Ignore, "ignore");
-                            ui.selectable_value(policy, RedirectWashPolicy::Locally, "locally");
-                            ui.selectable_value(policy, RedirectWashPolicy::ViaMixer, "via mixer");
-                        });
-                }
-            }
-        });
-
-        if previous_config != self.ui_config_state {
-            debug!("Config changed.");
-            self.app_state_flow.modify_config(|config| {
-                apply_ui_config(config, &self.ui_config_state);
             });
         }
+
+        let auto_start = gtk::CheckButton::with_label("Start debloater with system startup");
+        auto_start.set_active(ui_config_state.auto_start);
+        content.pack_start(&auto_start, false, false, 0);
+        {
+            let app_state_flow = app_state_flow.clone();
+            auto_start.connect_toggled(move |checkbox| {
+                let auto_launch = &app_state_flow.current().auto_launch;
+                let result = if checkbox.is_active() {
+                    auto_launch.enable()
+                } else {
+                    auto_launch.disable()
+                };
+                if let Err(err) = result {
+                    error!("Could not update auto start: {err}");
+                }
+            });
+        }
+
+        let separator = gtk::Separator::new(gtk::Orientation::Horizontal);
+        content.pack_start(&separator, false, false, 4);
+
+        let links_heading = heading("Per user generated links");
+        links_heading.set_tooltip_text(Some(
+            "Section for links that cannot be anonymised without requesting service server.",
+        ));
+        content.pack_start(&links_heading, false, false, 0);
+
+        let mixer_row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let mixer_label = gtk::Label::new(Some("Mixer instance url:"));
+        mixer_label.set_halign(gtk::Align::Start);
+        mixer_label.set_tooltip_text(Some(
+            "To remove tracking capabilities of short links like https://vm.tiktok.com/PerUserId \
+we need request target server to unroll it. You can do this from your local network, but there is \
+a risk that they will catch you by correlating your IP address. This option allows you to resolve \
+these links via service hosted on other network. It sends url to third party person if you don't \
+host mixer yourself.",
+        ));
+        let mixer_entry = gtk::Entry::new();
+        mixer_entry.set_hexpand(true);
+        mixer_entry.set_text(&ui_config_state.mixer_instance);
+        let public_instance_button = gtk::Button::with_label("use public instance");
+        mixer_row.pack_start(&mixer_label, false, false, 0);
+        mixer_row.pack_start(&mixer_entry, true, true, 0);
+        mixer_row.pack_start(&public_instance_button, false, false, 0);
+        content.pack_start(&mixer_row, false, false, 0);
+
+        let mixer_error = gtk::Label::new(None);
+        mixer_error.set_halign(gtk::Align::Start);
+        content.pack_start(&mixer_error, false, false, 0);
+        update_mixer_config(&app_state_flow, &mixer_entry, &mixer_error);
+        {
+            let app_state_flow = app_state_flow.clone();
+            let mixer_error = mixer_error.clone();
+            mixer_entry.connect_changed(move |entry| {
+                update_mixer_config(&app_state_flow, entry, &mixer_error);
+            });
+        }
+        {
+            let mixer_entry = mixer_entry.clone();
+            public_instance_button.connect_clicked(move |_| {
+                mixer_entry.set_text(PUBLIC_MIXER_INSTANCE);
+            });
+        }
+
+        for rule in rule_set().iter().filter(|rule| {
+            rule.washing_programs
+                .contains(&WashingProgram::ResolveRedirection)
+        }) {
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+            let label = gtk::Label::new(Some(&rule.domains.join(", ")));
+            label.set_halign(gtk::Align::Start);
+            label.set_hexpand(true);
+            let combo = gtk::ComboBoxText::new();
+            combo.append(Some("ignore"), "ignore");
+            combo.append(Some("locally"), "locally");
+            combo.append(Some("via-mixer"), "via mixer");
+
+            let policy = ui_config_state
+                .redirect_policy
+                .get(&rule.name)
+                .copied()
+                .unwrap_or(RedirectWashPolicy::Ignore);
+            combo.set_active_id(Some(policy_id(policy)));
+
+            row.pack_start(&label, true, true, 0);
+            row.pack_start(&combo, false, false, 0);
+            content.pack_start(&row, false, false, 0);
+
+            let app_state_flow = app_state_flow.clone();
+            let rule_name = rule.name.clone();
+            combo.connect_changed(move |combo| {
+                if let Some(policy) = combo.active_id().as_deref().and_then(policy_from_id) {
+                    app_state_flow.modify_config(|config| {
+                        config
+                            .url_washer
+                            .redirect_policy
+                            .insert(rule_name.clone(), policy);
+                    });
+                }
+            });
+        }
+
+        window.connect_delete_event(move |_, _| {
+            on_close();
+            Propagation::Proceed
+        });
+
+        content.show_all();
+        Self { window }
     }
 
-    fn on_close_event(&mut self) -> bool {
-        self.hide = true;
-        if let Err(err) = Notification::new()
-            .appname(APP_NAME)
-            .summary(APP_NAME)
-            .body("Minimized to tray icon :)")
-            .show()
-        {
-            error!("Could not show error notification: {err}");
-        }
+    pub fn show(&self) {
+        self.window.show();
+        self.window.present();
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn current_ui_config(app_state_flow: &AppStateFlow) -> UiConfigState {
+    let app_state = app_state_flow.current();
+    let config = &app_state.config;
+    let mixer_instance = config
+        .url_washer
+        .mixer_instance
+        .as_ref()
+        .map(|url| url.to_string())
+        .unwrap_or_default();
+    let auto_start = app_state.auto_launch.is_enabled().unwrap_or_else(|err| {
+        warn!("Could not check if autostart is enabled: {err}");
         false
+    });
+    UiConfigState {
+        mixer_instance,
+        redirect_policy: config.url_washer.redirect_policy.clone(),
+        enable_clipboard_patcher: config.enable_clipboard_patcher,
+        auto_start,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn heading(text: &str) -> gtk::Label {
+    let label = gtk::Label::new(None);
+    label.set_markup(&format!("<b>{text}</b>"));
+    label.set_halign(gtk::Align::Start);
+    label
+}
+
+#[cfg(target_os = "linux")]
+fn update_mixer_config(app_state_flow: &AppStateFlow, entry: &gtk::Entry, error: &gtk::Label) {
+    let mixer_instance = entry.text().to_string();
+    let parsed_mixer_instance = if mixer_instance.is_empty() {
+        Ok(None)
+    } else {
+        Url::parse(&mixer_instance).map(Some)
+    };
+
+    match parsed_mixer_instance {
+        Ok(mixer_instance) => {
+            error.set_text("");
+            app_state_flow.modify_config(|config| {
+                config.url_washer.mixer_instance = mixer_instance;
+            });
+        }
+        Err(err) => {
+            error.set_markup(&format!(
+                "<span foreground=\"red\">Invalid url: {err}</span>"
+            ));
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn policy_id(policy: RedirectWashPolicy) -> &'static str {
+    match policy {
+        RedirectWashPolicy::Ignore => "ignore",
+        RedirectWashPolicy::Locally => "locally",
+        RedirectWashPolicy::ViaMixer => "via-mixer",
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn policy_from_id(id: &str) -> Option<RedirectWashPolicy> {
+    match id {
+        "ignore" => Some(RedirectWashPolicy::Ignore),
+        "locally" => Some(RedirectWashPolicy::Locally),
+        "via-mixer" => Some(RedirectWashPolicy::ViaMixer),
+        _ => None,
     }
 }
 

@@ -17,9 +17,6 @@
       };
       cargoLock = {
         lockFile = ./Cargo.lock;
-        outputHashes = {
-          "ecolor-0.22.0" = "sha256-ABNf+iCNo6L9GnZGON6nQvsYIcMZ7JbNV9cD8LdWwus=";
-        };
       };
       mixerOutput = import ./nix/mixer.nix {
         inherit

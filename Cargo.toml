@@ -1,3 +1,10 @@
 [workspace]
 members = ["desktop", "urlwasher", "mixer"]
 resolver = "2"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "z"
+panic = "abort"
+strip = true
