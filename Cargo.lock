@@ -3568,6 +3568,9 @@ dependencies = [
  "tray-icon",
  "url",
  "urlwasher",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
  "winit",
 ]
 
