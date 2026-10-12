@@ -60,6 +60,14 @@ pub fn watch() -> Option<mpsc::UnboundedReceiver<()>> {
     Some(rx)
 }
 
+/// Reports whether a Wayland compositor answers, without subscribing to events.
+pub fn reachable() -> bool {
+    let Ok(connection) = Connection::connect_to_env() else {
+        return false;
+    };
+    registry_queue_init::<State>(&connection).is_ok()
+}
+
 fn setup(tx: mpsc::UnboundedSender<()>) -> anyhow::Result<(EventQueue<State>, State)> {
     let connection = Connection::connect_to_env().context("connect to Wayland")?;
     let (globals, queue) = registry_queue_init::<State>(&connection).context("list globals")?;
