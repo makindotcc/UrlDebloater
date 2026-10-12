@@ -3562,6 +3562,7 @@ dependencies = [
  "ksni",
  "log",
  "notify",
+ "objc2-app-kit 0.3.2",
  "serde",
  "serde_json",
  "tokio",
@@ -3571,6 +3572,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
+ "windows-sys 0.60.2",
  "winit",
 ]
 
