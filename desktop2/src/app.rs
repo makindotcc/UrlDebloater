@@ -208,7 +208,7 @@ pub fn run() -> anyhow::Result<()> {
                     .build()
                     .unwrap();
                 let result = runtime.block_on(async move {
-                    app.run(app_command_rx).await;
+                    tokio::task::spawn(async move { app.run(app_command_rx).await });
                     tray::platform::run(app_command_tx, app_event_rx).await
                 });
                 if let Err(err) = result {
