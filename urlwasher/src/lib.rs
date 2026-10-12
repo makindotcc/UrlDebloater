@@ -91,11 +91,13 @@ where
             return Ok(new_url);
         };
         let new_host = match domain {
-            "twitter.com" | "x.com" => match self.config.twitter_policy {
-                TwitterPolicy::Original => None,
-                TwitterPolicy::VxTwitter => Some("vxtwitter.com"),
-                TwitterPolicy::FxTwitter => Some("fxtwitter.com"),
-            },
+            "twitter.com" | "x.com" if is_twitter_post_path(url.path()) => {
+                match self.config.twitter_policy {
+                    TwitterPolicy::Original => None,
+                    TwitterPolicy::VxTwitter => Some("vxtwitter.com"),
+                    TwitterPolicy::FxTwitter => Some("fxtwitter.com"),
+                }
+            }
             _ => None,
         };
         if let Some(new_host) = new_host {
@@ -103,6 +105,12 @@ where
         }
         Ok(new_url)
     }
+}
+
+// https://fxtwitter.com/Foo/status/12345
+fn is_twitter_post_path(path: &str) -> bool {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    segments.len() >= 3 && segments[1] == "status"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,7 +147,7 @@ impl Default for WashOptions {
 
 #[cfg(test)]
 mod tests {
-    use crate::{RedirectResolver, UrlWasher, WashOptions};
+    use crate::{is_twitter_post_path, RedirectResolver, UrlWasher, WashOptions};
     use anyhow::Context;
     use std::{collections::HashMap, future::Future};
     use url::Url;
@@ -213,5 +221,13 @@ mod tests {
                 "Invalid wash result of dirty url {dirty}"
             );
         }
+    }
+
+    #[test]
+    fn test_is_twitter_post_path() {
+        assert!(is_twitter_post_path("/foo/status/12345823"));
+        assert!(is_twitter_post_path("/foo/status/12345"));
+        assert!(!is_twitter_post_path("/foo/other/12345"));
+        assert!(!is_twitter_post_path("/foo/status"));
     }
 }
