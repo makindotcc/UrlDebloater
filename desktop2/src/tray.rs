@@ -1,17 +1,9 @@
-use crate::app::{AppCommand, AppEvent, CLIPBOARD_PAUSE_DURATION};
+use crate::app::CLIPBOARD_PAUSE_DURATION;
 use std::{ops::Sub, time::Instant};
-use tokio::sync::mpsc;
 
 const APP_NAME: &str = "UrlDebloater";
 const TRAY_ID: &str = "urldebloater";
 const TRAY_ICON_SIZE: u32 = 32;
-
-pub async fn run(
-    command_tx: mpsc::Sender<AppCommand>,
-    event_rx: mpsc::Receiver<AppEvent>,
-) -> anyhow::Result<()> {
-    platform::run(command_tx, event_rx).await
-}
 
 fn pause_clipboard_title(expires_at: Option<Instant>) -> String {
     match expires_at {
@@ -27,7 +19,7 @@ fn pause_clipboard_title(expires_at: Option<Instant>) -> String {
 }
 
 #[cfg(target_os = "linux")]
-mod platform {
+pub(crate) mod platform {
     use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, pause_clipboard_title};
     use crate::app::{AppCommand, AppEvent};
     use anyhow::Context;

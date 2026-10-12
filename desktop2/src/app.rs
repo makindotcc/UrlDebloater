@@ -3,12 +3,13 @@ use crate::{
     config::{self, Config, RedirectWashPolicy},
     tray,
 };
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use arboard::Clipboard;
 use log::{error, info};
 use std::{
     pin::Pin,
     sync::Arc,
+    thread,
     time::{Duration, Instant},
 };
 use tokio::{select, sync::mpsc, time::Interval};
@@ -191,23 +192,51 @@ fn text_washer(config: &Config) -> TextWasher<DefaultRedirectResolver> {
     }
 }
 
-pub fn spawn_app(
-    app_command_rx: mpsc::Receiver<AppCommand>,
-    app_event_tx: mpsc::Sender<AppEvent>,
-) -> anyhow::Result<()> {
-    let mut app = App::new(app_event_tx).context("initialize application")?;
-    tokio::spawn(async move {
-        app.run(app_command_rx).await;
-    });
-    Ok(())
-}
-
-pub async fn run() -> anyhow::Result<()> {
+pub fn run() -> anyhow::Result<()> {
     let (app_command_tx, app_command_rx) = mpsc::channel(16);
     let (app_event_tx, app_event_rx) = mpsc::channel(16);
 
-    spawn_app(app_command_rx, app_event_tx).context("spawn app")?;
+    let mut app = App::new(app_event_tx).context("initialize application")?;
+
+    #[cfg(target_os = "linux")]
+    {
+        thread::Builder::new()
+            .name("app-worker".into())
+            .spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                let result = runtime.block_on(async move {
+                    app.run(app_command_rx).await;
+                    tray::platform::run(app_command_tx, app_event_rx).await
+                });
+                if let Err(err) = result {
+                    error!("Application worker encountered an error: {:?}", err);
+                }
+            })
+            .context("spawn application worker")?
+            .join()
+            .map_err(|err| anyhow!("Run application worker thread: {err:?}"))?;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        thread::Builder::new()
+            .name("app-worker".into())
+            .spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                runtime.block_on(async move {
+                    app.run(app_command_rx).await;
+                });
+            })
+            .context("spawn application worker")?;
+        tray::platform::run(app_command_tx, app_event_rx);
+    }
 
     info!("Application workers started");
-    tray::run(app_command_tx, app_event_rx).await
+    Ok(())
 }
