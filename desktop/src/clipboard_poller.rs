@@ -1,5 +1,4 @@
 use std::time::Duration;
-use tokio::time::sleep;
 
 pub struct ClipboardPoller {
     last_text: String,
@@ -12,9 +11,9 @@ impl ClipboardPoller {
         }
     }
 
-    pub async fn poll(&mut self, arboard: &mut arboard::Clipboard) -> Result<&str, arboard::Error> {
+    pub fn poll(&mut self, arboard: &mut arboard::Clipboard) -> Result<&str, arboard::Error> {
         loop {
-            sleep(Duration::from_millis(200)).await;
+            std::thread::sleep(Duration::from_millis(200));
             let new_text = match arboard.get_text() {
                 Ok(text) => text,
                 Err(arboard::Error::ContentNotAvailable) => continue,

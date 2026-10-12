@@ -6,27 +6,34 @@ description = "An url debloater."
 authors = ["makindotcc"]
 
 [dependencies]
-tokio = { version = "1.52", features = ["macros", "rt-multi-thread", "fs"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+log = "0.4"
 arboard = { version = "3.6", default-features = false }
 anyhow = "1.0"
 urlwasher = { path = "../urlwasher" }
-tray-icon = { version = "0.11.3", default-features = false }
-image = "0.24"
+ksni = { version = "0.3", default-features = false, features = [
+    "async-io",
+    "blocking",
+], optional = true }
 url = "2.5"
-futures = "0.3.32"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.150"
+serde_json = "1.0"
 auto-launch = "0.5"
+tokio = { version = "1.52", features = ["rt"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
-gtk = "0.18"
-glib = "0.18"
+arboard = { version = "3.6", default-features = false, features = [
+    "wayland-data-control",
+] }
+fltk = { version = "1.5", default-features = false, features = [
+    "no-images",
+    "no-pango",
+], optional = true }
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 embed-resource = "2.5.2"
 
 [features]
+default = ["tray"]
 console = []
+config-gui = ["dep:fltk"]
+tray = ["dep:ksni"]

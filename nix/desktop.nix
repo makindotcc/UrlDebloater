@@ -19,22 +19,7 @@ pkgs.rustPlatform.buildRustPackage {
   ];
 
   nativeBuildInputs = [
-    pkgs.makeWrapper
     pkgs.pkg-config
   ];
-  buildInputs = [
-    pkgs.gtk3
-    pkgs.libayatana-appindicator
-    pkgs.openssl
-  ];
-
-  postInstall = ''
-    wrapProgram $out/bin/urldebloater \
-      --prefix LD_LIBRARY_PATH : ${
-        pkgs.lib.makeLibraryPath [
-          pkgs.libayatana-appindicator
-          pkgs.gtk3
-        ]
-      }
-  '';
+  buildInputs = [ ];
 }

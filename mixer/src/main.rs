@@ -1,6 +1,4 @@
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
+mod error;
 
 use anyhow::Context;
 use axum::extract::{Query, State};
@@ -11,6 +9,9 @@ use axum::{
 use axum_macros::debug_handler;
 use error::{AppResult, UserError};
 use serde::Deserialize;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tower::util::option_layer;
 use tower::ServiceBuilder;
 use tower_governor::key_extractor::SmartIpKeyExtractor;
@@ -19,9 +20,12 @@ use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use urlwasher::{RedirectWashPolicy, UrlWasher, UrlWasherConfig};
+use urlwasher::redirect_resolver::WithoutMixerRedirectResolver;
+use urlwasher::{UrlWasher, WashOptions};
 
-mod error;
+struct AppState {
+    url_washer: UrlWasher<WithoutMixerRedirectResolver>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -46,14 +50,7 @@ async fn main() {
 }
 
 fn app(rate_limit: bool) -> Router {
-    let url_washer = UrlWasher::new({
-        let mut config = UrlWasherConfig::default();
-        config
-            .redirect_policy
-            .iter_mut()
-            .for_each(|(_, redirect_policy)| *redirect_policy = RedirectWashPolicy::Locally);
-        config
-    });
+    let url_washer = UrlWasher::new(WithoutMixerRedirectResolver::default());
     Router::new()
         .route("/wash", get(wash))
         .layer(
@@ -76,7 +73,7 @@ fn app(rate_limit: bool) -> Router {
                     None
                 })),
         )
-        .with_state(Arc::new(url_washer))
+        .with_state(Arc::new(AppState { url_washer }))
 }
 
 #[derive(Deserialize)]
@@ -86,7 +83,7 @@ struct WashQuery {
 
 #[debug_handler]
 async fn wash(
-    State(washer): State<Arc<UrlWasher>>,
+    State(state): State<Arc<AppState>>,
     Query(query): Query<WashQuery>,
 ) -> AppResult<String> {
     const MAX_URL_LENGTH: usize = 1024;
@@ -95,7 +92,11 @@ async fn wash(
     }
 
     let url = Url::parse(&query.url).map_err(|_| UserError::InvalidUrl)?;
-    let washed = washer.wash(&url).await.context("wash url")?;
+    let washed = state
+        .url_washer
+        .wash(&url, WashOptions::default())
+        .await
+        .context("wash url")?;
     Ok(washed.unwrap_or(url).to_string())
 }
 

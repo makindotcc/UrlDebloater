@@ -1,8 +1,9 @@
 use anyhow::Context;
-use futures::Future;
 use serde::{Deserialize, Serialize};
-use tokio::{fs, time::Instant};
-use urlwasher::UrlWasherConfig;
+use std::{
+    fs,
+    time::{Instant, SystemTime},
+};
 
 const CONFIG_FILE: &str = "config.json";
 
@@ -24,17 +25,23 @@ impl Default for AppConfig {
     }
 }
 
-pub async fn from_file() -> anyhow::Result<AppConfig> {
-    let bytes = fs::read(CONFIG_FILE).await.context("read file")?;
+pub fn from_file() -> anyhow::Result<AppConfig> {
+    let bytes = fs::read(CONFIG_FILE).context("read file")?;
     let config = serde_json::from_slice(&bytes).context("deserialize config")?;
     Ok(config)
 }
 
-pub fn save_to_file(config: &AppConfig) -> impl Future<Output = anyhow::Result<()>> {
-    let serialized = serde_json::to_vec_pretty(config);
-    async move {
-        fs::write(CONFIG_FILE, serialized.context("serialize config")?)
-            .await
-            .context("write config")
-    }
+pub fn save_to_file(config: &AppConfig) -> anyhow::Result<()> {
+    fs::write(
+        CONFIG_FILE,
+        serde_json::to_vec_pretty(config).context("serialize config")?,
+    )
+    .context("write config")
+}
+
+pub fn modified_time() -> anyhow::Result<SystemTime> {
+    fs::metadata(CONFIG_FILE)
+        .context("read config metadata")?
+        .modified()
+        .context("read config modified time")
 }
