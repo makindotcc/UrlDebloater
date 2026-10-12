@@ -1,5 +1,5 @@
 [workspace]
-members = ["desktop", "urlwasher", "mixer", "desktop2"]
+members = ["urlwasher", "mixer", "desktop2"]
 resolver = "2"
 
 [profile.release]

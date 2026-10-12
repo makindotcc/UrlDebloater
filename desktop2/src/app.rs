@@ -9,7 +9,6 @@ use log::{error, info};
 use std::{
     pin::Pin,
     sync::Arc,
-    thread,
     time::{Duration, Instant},
 };
 use tokio::{select, sync::mpsc, time::Interval};
@@ -100,12 +99,6 @@ impl App {
                 } => {
                     self.progress_clipboard_pause();
                 }
-                // config = self.config_events.recv() => {
-                //     match config {
-                //         Some(config) => AppEvent::ConfigChanged(config),
-                //         None => continue,
-                //     }
-                // }
             };
         }
 
@@ -203,25 +196,18 @@ pub fn spawn_app(
     app_event_tx: mpsc::Sender<AppEvent>,
 ) -> anyhow::Result<()> {
     let mut app = App::new(app_event_tx).context("initialize application")?;
-    thread::Builder::new()
-        .name("app-worker".into())
-        .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap();
-            runtime.block_on(app.run(app_command_rx));
-        })
-        .context("spawn application worker")?;
+    tokio::spawn(async move {
+        app.run(app_command_rx).await;
+    });
     Ok(())
 }
 
-pub fn run() -> anyhow::Result<()> {
+pub async fn run() -> anyhow::Result<()> {
     let (app_command_tx, app_command_rx) = mpsc::channel(16);
     let (app_event_tx, app_event_rx) = mpsc::channel(16);
 
     spawn_app(app_command_rx, app_event_tx).context("spawn app")?;
 
     info!("Application workers started");
-    tray::run(app_command_tx, app_event_rx)
+    tray::run(app_command_tx, app_event_rx).await
 }

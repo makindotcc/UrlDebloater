@@ -120,7 +120,7 @@ pub enum TwitterPolicy {
 impl Default for WasherConfig {
     fn default() -> Self {
         Self {
-            twitter_policy: TwitterPolicy::FxTwitter,
+            twitter_policy: TwitterPolicy::Original,
         }
     }
 }
