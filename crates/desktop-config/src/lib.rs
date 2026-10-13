@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use url::Url;
-use urlwasher::WasherConfig;
+use urldebloater_urlwasher::WasherConfig;
 
 /// Config file name inside the platform config directory.
 const CONFIG_FILE: &str = "config.json";
@@ -158,7 +158,7 @@ mod tests {
     use super::*;
 
     fn temp_config_path(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("urldebloater-config-test-{name}"));
+        let dir = std::env::temp_dir().join(format!("desktop-config-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         dir.join(CONFIG_FILE)
     }

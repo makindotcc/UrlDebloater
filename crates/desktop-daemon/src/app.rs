@@ -13,8 +13,8 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{select, sync::mpsc, time::Interval};
-use urldebloater_config::{self as config, Config, RedirectWashPolicy};
-use urlwasher::{
+use urldebloater_desktop_config::{self as config, Config, RedirectWashPolicy};
+use urldebloater_urlwasher::{
     UrlWasher,
     redirect_resolver::{
         DefaultRedirectResolver, WithMixerRedirectResolver, WithoutMixerRedirectResolver,
@@ -163,7 +163,7 @@ impl App {
             self.config_gui_running.store(false, Ordering::Relaxed);
             return;
         };
-        let path = urldebloater_config::config_path();
+        let path = urldebloater_desktop_config::config_path();
         match std::process::Command::new(&exe).arg("--config").arg(&path).spawn() {
             Ok(mut child) => {
                 // The application outlives the window, so reap the child instead of
@@ -219,7 +219,7 @@ pub enum AppEvent {
 }
 
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(300);
-const CONFIG_GUI_BIN: &str = "urldebloater-config-gui";
+const CONFIG_GUI_BIN: &str = "urldebloater-desktop-config-gui";
 
 fn config_gui_path() -> Option<std::path::PathBuf> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
@@ -234,7 +234,7 @@ fn config_gui_path() -> Option<std::path::PathBuf> {
 
 /// Reloads the config whenever the config window or the user rewrites the file.
 fn watch_config(command_tx: mpsc::Sender<AppCommand>) -> Option<RecommendedWatcher> {
-    let path = urldebloater_config::config_path();
+    let path = urldebloater_desktop_config::config_path();
     let dir = path.parent()?.to_path_buf();
     let watched = path;
     let last_reload = Arc::new(Mutex::new(None::<Instant>));

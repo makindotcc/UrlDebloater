@@ -1,11 +1,11 @@
 [package]
-name = "urldebloater-config-gui"
+name = "urldebloater-desktop-config-gui"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-urldebloater-config = { path = "../urldebloater-config" }
-urlwasher = { path = "../urlwasher" }
+urldebloater-desktop-config = { path = "../desktop-config" }
+urldebloater-urlwasher = { path = "../urlwasher" }
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"

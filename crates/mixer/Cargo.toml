@@ -14,6 +14,6 @@ tower_governor = "0.3"
 tower = { version = "0.4.13", features = ["timeout", "util"] }
 tower-http = { version = "0.5", features = ["trace", "util"] }
 serde = { version = "1.0", features = ["derive"] }
-urlwasher = { path = "../urlwasher" }
+urldebloater-urlwasher = { path = "../urlwasher" }
 axum-macros = "0.4"
 http-body-util = "0.1"

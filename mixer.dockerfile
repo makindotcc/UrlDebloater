@@ -3,27 +3,19 @@ WORKDIR /urldebloater
 
 COPY Cargo.toml .
 COPY Cargo.lock .
-# workspace mocks
-RUN cargo new desktop
-RUN cargo new urlwasher
-RUN cargo new mixer
+COPY crates/urlwasher/Cargo.toml crates/urlwasher/Cargo.toml
+COPY crates/mixer/Cargo.toml crates/mixer/Cargo.toml
 
-# urlwasher deps dummy cache layer
-COPY urlwasher/Cargo.toml urlwasher/Cargo.toml
-RUN cargo build --release
+# Build dependencies first, so edits to mixer sources reuse this layer.
+RUN mkdir -p crates/urlwasher/src crates/mixer/src \
+    && : > crates/urlwasher/src/lib.rs \
+    && printf 'fn main() {}\n' > crates/mixer/src/main.rs \
+    && cargo build --release --locked -p urldebloater-mixer
 
-# mixer deps dummy cache layer
-COPY mixer/Cargo.toml mixer/Cargo.toml
-RUN cargo build --release
-
-# build urlwasher
-COPY urlwasher/src/ urlwasher/src/
-RUN cargo build --release
-
-COPY mixer/src/ mixer/src/
-# force rebuild main.rs
-RUN touch mixer/src/main.rs
-RUN cargo build --release
+COPY crates/urlwasher/src/ crates/urlwasher/src/
+COPY crates/mixer/src/ crates/mixer/src/
+RUN touch crates/mixer/src/main.rs \
+    && cargo build --release --locked -p urldebloater-mixer
 
 FROM debian:bullseye AS runtime
 RUN apt-get update && apt install -y tini ca-certificates

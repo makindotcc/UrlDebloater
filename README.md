@@ -38,7 +38,7 @@ https://github.com/makindotcc/UrlDebloater/assets/9150636/12d83dd8-9c60-4ada-94b
 # Configuration
 
 The tray menu's *Settings...* entry opens the configuration window — a separate
-process (`urldebloater-config-gui`, expected next to the application binary), so
+process (`urldebloater-desktop-config-gui`, expected next to the application binary), so
 nothing is allocated for it while it is closed. Saving reloads the configuration
 in the running application; no restart is needed.
 
@@ -50,6 +50,21 @@ in the running application; no restart is needed.
 
 A `config.json` in the working directory (where older versions kept it) is
 migrated on first start.
+
+# Repository layout
+
+Crates live in `crates/`:
+
+| crate | role |
+| ----- | ---- |
+| `urldebloater-urlwasher` | URL washing (query params, redirects, shorteners) |
+| `urldebloater-mixer` | optional server for resolving redirects from another network |
+| `urldebloater-desktop-daemon` | desktop background process: clipboard, tray, spawning the settings window |
+| `urldebloater-desktop-config` | desktop settings model, config path and atomic persistence |
+| `urldebloater-desktop-config-gui` | the settings window (native widgets via winio) |
+
+Platforms that will get their own crates later (`urldebloater-android`, `-ios`, `-web`) are not there
+yet; browser extensions are planned under `extensions/`.
 
 # Mobile platforms plans
 

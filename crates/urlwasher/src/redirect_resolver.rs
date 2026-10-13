@@ -82,7 +82,7 @@ impl WithMixerRedirectResolver {
         Self {
             client: reqwest::Client::builder()
                 .redirect(reqwest::redirect::Policy::none())
-                .user_agent("urlwasher")
+                .user_agent("urldebloater_urlwasher")
                 .timeout(Duration::from_secs(5))
                 .build()
                 .expect("build HTTP client"),

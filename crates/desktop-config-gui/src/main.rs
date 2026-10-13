@@ -4,9 +4,9 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use urldebloater_config::{Config, RedirectWashPolicy};
+use urldebloater_desktop_config::{Config, RedirectWashPolicy};
 use url::Url;
-use urlwasher::TwitterPolicy;
+use urldebloater_urlwasher::TwitterPolicy;
 use winio::prelude::*;
 
 const MARGIN: f64 = 12.0;
@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let path = config_path_from_args()?;
-    let config = match urldebloater_config::load_from(&path) {
+    let config = match urldebloater_desktop_config::load_from(&path) {
         Ok(config) => config,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Config::default(),
         Err(err) => {
@@ -50,7 +50,7 @@ fn config_path_from_args() -> Result<PathBuf> {
             return Ok(PathBuf::from(path));
         }
     }
-    Ok(urldebloater_config::config_path())
+    Ok(urldebloater_desktop_config::config_path())
 }
 
 struct ConfigWindow {
@@ -198,7 +198,7 @@ impl Component for ConfigWindow {
             Message::PolicyChanged => Ok(true),
             Message::Save => {
                 let config = self.collect_config()?;
-                urldebloater_config::save_to(&self.path, &config)
+                urldebloater_desktop_config::save_to(&self.path, &config)
                     .with_context(|| format!("save {}", self.path.display()))?;
                 log::info!("Saved configuration to {}", self.path.display());
                 sender.output(());
@@ -281,7 +281,7 @@ impl ConfigWindow {
                 self.policy.selection()?.unwrap_or(1),
                 mixer_url,
             ),
-            washer_config: urlwasher::WasherConfig {
+            washer_config: urldebloater_urlwasher::WasherConfig {
                 twitter_policy: twitter_policy_from_index(self.twitter.selection()?.unwrap_or(0)),
             },
             ..self.config.clone()

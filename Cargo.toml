@@ -1,5 +1,5 @@
 [workspace]
-members = ["urlwasher", "mixer", "desktop2", "urldebloater-config", "urldebloater-config-gui"]
+members = ["crates/*"]
 resolver = "2"
 
 [profile.release]

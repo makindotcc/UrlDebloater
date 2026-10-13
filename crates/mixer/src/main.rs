@@ -20,8 +20,8 @@ use tower_http::trace::TraceLayer;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 use url::Url;
-use urlwasher::redirect_resolver::WithoutMixerRedirectResolver;
-use urlwasher::{UrlWasher, WashOptions};
+use urldebloater_urlwasher::redirect_resolver::WithoutMixerRedirectResolver;
+use urldebloater_urlwasher::{UrlWasher, WashOptions};
 
 struct AppState {
     url_washer: UrlWasher<WithoutMixerRedirectResolver>,

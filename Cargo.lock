@@ -4360,7 +4360,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "urldebloater-config"
+name = "urldebloater-desktop-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4368,24 +4368,24 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
- "urlwasher",
+ "urldebloater-urlwasher",
 ]
 
 [[package]]
-name = "urldebloater-config-gui"
+name = "urldebloater-desktop-config-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "env_logger",
  "log",
  "url",
- "urldebloater-config",
- "urlwasher",
+ "urldebloater-desktop-config",
+ "urldebloater-urlwasher",
  "winio",
 ]
 
 [[package]]
-name = "urldebloater-desktop2"
+name = "urldebloater-desktop-daemon"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -4400,8 +4400,8 @@ dependencies = [
  "tokio",
  "tray-icon",
  "url",
- "urldebloater-config",
- "urlwasher",
+ "urldebloater-desktop-config",
+ "urldebloater-urlwasher",
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
@@ -4425,11 +4425,11 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "urlwasher",
+ "urldebloater-urlwasher",
 ]
 
 [[package]]
-name = "urlwasher"
+name = "urldebloater-urlwasher"
 version = "0.1.0"
 dependencies = [
  "anyhow",
