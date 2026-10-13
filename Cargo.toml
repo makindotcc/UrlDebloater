@@ -2,6 +2,37 @@
 members = ["crates/*"]
 resolver = "2"
 
+[workspace.dependencies]
+urldebloater-desktop-config = { path = "crates/desktop-config" }
+urldebloater-urlwasher = { path = "crates/urlwasher" }
+
+anyhow = "1.0"
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+strum = { version = "0.28", features = ["derive"] }
+url = { version = "2.5", features = ["serde"] }
+
+lru = "0.12"
+regex = "1.11"
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+
+env_logger = "0.11"
+tokio = { version = "1.52", features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
+
+axum = "0.7"
+axum-macros = "0.4"
+http-body-util = "0.1"
+tower = { version = "0.4.13", features = ["timeout", "util"] }
+tower-http = { version = "0.5", features = ["trace", "util"] }
+tower_governor = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
+notify = "8.2"
+winio = { version = "0.12", default-features = false }
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

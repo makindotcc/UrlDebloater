@@ -4,19 +4,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-urldebloater-urlwasher = { path = "../urlwasher" }
-urldebloater-desktop-config = { path = "../desktop-config" }
-log = "0.4"
-arboard = { version = "3.6", default-features = false, features = [
-    "wayland-data-control",
-] }
-anyhow = "1.0"
-tokio = { version = "1.52", features = ["macros", "rt", "sync", "time"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-url = "2.5"
-env_logger = "0.11"
-notify = "8.2"
+urldebloater-urlwasher.workspace = true
+urldebloater-desktop-config.workspace = true
+log.workspace = true
+arboard.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+env_logger.workspace = true
+notify.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = { version = "0.3", default-features = false, features = ["async-io"] }
