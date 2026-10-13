@@ -1,28 +1,19 @@
 //! Configuration window. Runs as a separate process spawned by the tray, so the
 //! application itself does not pay for the GUI runtime while the window is closed.
 
-use std::path::PathBuf;
-
 use anyhow::{Context, Result};
-use urldebloater_desktop_config::{Config, RedirectWashPolicy};
+use std::path::PathBuf;
+use strum::IntoEnumIterator;
 use url::Url;
-use urldebloater_urlwasher::TwitterPolicy;
+use urldebloater_desktop_config::{Config, RedirectWashPolicy, RedirectWashPolicyDiscriminants};
+use urldebloater_urlwasher::{TwitterPolicy, WasherConfig};
 use winio::prelude::*;
 
 const MARGIN: f64 = 12.0;
-// GTK and WinUI controls are at least ~34px tall; keeping rows this tall avoids
-// overlapping hit areas.
 const ROW_HEIGHT: f64 = 34.0;
 const WINDOW_WIDTH: f64 = 560.0;
 const WINDOW_HEIGHT: f64 = 320.0;
 const LABEL_WIDTH: f64 = 170.0;
-
-const POLICIES: [&str; 3] = [
-    "Ignore redirects",
-    "Resolve redirects locally",
-    "Resolve via mixer",
-];
-const TWITTER_POLICIES: [&str; 3] = ["Original", "VxTwitter", "FxTwitter"];
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -112,16 +103,22 @@ impl Component for ConfigWindow {
         }
 
         debloat.set_checked(config.clipboard_debloater)?;
-        policy.set_items(POLICIES)?;
-        policy.set_selection(config.redirect_wash_policy.index())?;
+        policy.set_items(RedirectWashPolicyDiscriminants::iter().map(redirect_wash_label))?;
+        policy.set_selection(combo_index(
+            RedirectWashPolicyDiscriminants::iter(),
+            &RedirectWashPolicyDiscriminants::from(&config.redirect_wash_policy),
+        ))?;
         mixer.set_text(
             config
                 .redirect_wash_policy
                 .mixer_url()
                 .map_or("", Url::as_str),
         )?;
-        twitter.set_items(TWITTER_POLICIES)?;
-        twitter.set_selection(twitter_index(&config.washer_config.twitter_policy))?;
+        twitter.set_items(TwitterPolicy::iter().map(|policy| twitter_policy_label(&policy)))?;
+        twitter.set_selection(combo_index(
+            TwitterPolicy::iter(),
+            &config.washer_config.twitter_policy,
+        ))?;
 
         window.show()?;
 
@@ -194,7 +191,6 @@ impl Component for ConfigWindow {
         log::debug!("message: {message:?}");
         match message {
             Message::Noop => Ok(false),
-            // The mixer URL only applies to the mixer policy.
             Message::PolicyChanged => Ok(true),
             Message::Save => {
                 let config = self.collect_config()?;
@@ -219,30 +215,47 @@ impl Component for ConfigWindow {
         let field_width = (width - LABEL_WIDTH).max(0.0);
         let mut y = MARGIN;
 
-        self.debloat
-            .set_rect(Rect::new(Point::new(MARGIN, y), Size::new(width, ROW_HEIGHT)))?;
+        self.debloat.set_rect(Rect::new(
+            Point::new(MARGIN, y),
+            Size::new(width, ROW_HEIGHT),
+        ))?;
         y += ROW_HEIGHT;
 
-        self.policy_label
-            .set_rect(Rect::new(Point::new(MARGIN, y), Size::new(LABEL_WIDTH, ROW_HEIGHT)))?;
-        self.policy
-            .set_rect(Rect::new(Point::new(field_x, y), Size::new(field_width, ROW_HEIGHT)))?;
+        self.policy_label.set_rect(Rect::new(
+            Point::new(MARGIN, y),
+            Size::new(LABEL_WIDTH, ROW_HEIGHT),
+        ))?;
+        self.policy.set_rect(Rect::new(
+            Point::new(field_x, y),
+            Size::new(field_width, ROW_HEIGHT),
+        ))?;
         y += ROW_HEIGHT;
 
         // The mixer URL only matters for the mixer policy.
-        let mixer_enabled = self.policy.selection()? == Some(2);
+        let mixer_enabled = combo_value(
+            RedirectWashPolicyDiscriminants::iter(),
+            self.policy.selection()?,
+        ) == RedirectWashPolicyDiscriminants::ViaMixer;
         self.mixer_label.set_enabled(mixer_enabled)?;
         self.mixer.set_enabled(mixer_enabled)?;
-        self.mixer_label
-            .set_rect(Rect::new(Point::new(MARGIN, y), Size::new(LABEL_WIDTH, ROW_HEIGHT)))?;
-        self.mixer
-            .set_rect(Rect::new(Point::new(field_x, y), Size::new(field_width, ROW_HEIGHT)))?;
+        self.mixer_label.set_rect(Rect::new(
+            Point::new(MARGIN, y),
+            Size::new(LABEL_WIDTH, ROW_HEIGHT),
+        ))?;
+        self.mixer.set_rect(Rect::new(
+            Point::new(field_x, y),
+            Size::new(field_width, ROW_HEIGHT),
+        ))?;
         y += ROW_HEIGHT;
 
-        self.twitter_label
-            .set_rect(Rect::new(Point::new(MARGIN, y), Size::new(LABEL_WIDTH, ROW_HEIGHT)))?;
-        self.twitter
-            .set_rect(Rect::new(Point::new(field_x, y), Size::new(field_width, ROW_HEIGHT)))?;
+        self.twitter_label.set_rect(Rect::new(
+            Point::new(MARGIN, y),
+            Size::new(LABEL_WIDTH, ROW_HEIGHT),
+        ))?;
+        self.twitter.set_rect(Rect::new(
+            Point::new(field_x, y),
+            Size::new(field_width, ROW_HEIGHT),
+        ))?;
 
         let buttons_y = (size.height - MARGIN - ROW_HEIGHT).max(y + ROW_HEIGHT);
         let button_width = 100.0;
@@ -265,42 +278,66 @@ impl Component for ConfigWindow {
 impl ConfigWindow {
     fn collect_config(&self) -> Result<Config> {
         let mixer_url = match self.mixer.text() {
-            Ok(text) if !text.trim().is_empty() => Url::parse(text.trim())
-                .context("mixer URL is not a valid URL")?,
+            Ok(text) if !text.trim().is_empty() => {
+                Url::parse(text.trim()).context("mixer URL is not a valid URL")?
+            }
             _ => self
                 .config
                 .redirect_wash_policy
                 .mixer_url()
                 .cloned()
-                .unwrap_or_else(|| Url::parse("https://urldebloater.makin.cc").expect("static URL")),
+                .unwrap_or_else(|| {
+                    Url::parse("https://urldebloater.makin.cc").expect("static URL")
+                }),
         };
 
         Ok(Config {
             clipboard_debloater: self.debloat.is_checked()?,
-            redirect_wash_policy: RedirectWashPolicy::from_index(
-                self.policy.selection()?.unwrap_or(1),
-                mixer_url,
-            ),
-            washer_config: urldebloater_urlwasher::WasherConfig {
-                twitter_policy: twitter_policy_from_index(self.twitter.selection()?.unwrap_or(0)),
+            redirect_wash_policy: {
+                let discriminant = combo_value(
+                    RedirectWashPolicyDiscriminants::iter(),
+                    self.policy.selection()?,
+                );
+                match discriminant {
+                    RedirectWashPolicyDiscriminants::Ignore => RedirectWashPolicy::Ignore,
+                    RedirectWashPolicyDiscriminants::Locally => RedirectWashPolicy::Locally,
+                    RedirectWashPolicyDiscriminants::ViaMixer => {
+                        RedirectWashPolicy::ViaMixer { mixer_url }
+                    }
+                }
+            },
+            washer_config: WasherConfig {
+                twitter_policy: combo_value(TwitterPolicy::iter(), self.twitter.selection()?),
             },
             ..self.config.clone()
         })
     }
 }
 
-fn twitter_index(policy: &TwitterPolicy) -> usize {
-    match policy {
-        TwitterPolicy::Original => 0,
-        TwitterPolicy::VxTwitter => 1,
-        TwitterPolicy::FxTwitter => 2,
+fn redirect_wash_label(option: RedirectWashPolicyDiscriminants) -> &'static str {
+    match option {
+        RedirectWashPolicyDiscriminants::Ignore => "Ignore redirects",
+        RedirectWashPolicyDiscriminants::Locally => "Resolve redirects locally",
+        RedirectWashPolicyDiscriminants::ViaMixer => "Resolve via mixer",
     }
 }
 
-fn twitter_policy_from_index(index: usize) -> TwitterPolicy {
-    match index {
-        1 => TwitterPolicy::VxTwitter,
-        2 => TwitterPolicy::FxTwitter,
-        _ => TwitterPolicy::Original,
+fn twitter_policy_label(policy: &TwitterPolicy) -> &'static str {
+    match policy {
+        TwitterPolicy::Original => "x.com",
+        TwitterPolicy::VxTwitter => "VxTwitter.com",
+        TwitterPolicy::FxTwitter => "FxTwitter.com",
     }
+}
+
+fn combo_value<T: Default>(mut options: impl Iterator<Item = T>, selection: Option<usize>) -> T {
+    selection
+        .and_then(|index| options.nth(index))
+        .unwrap_or_default()
+}
+
+fn combo_index<T: PartialEq>(mut options: impl Iterator<Item = T>, wanted: &T) -> usize {
+    options
+        .position(|candidate| candidate == *wanted)
+        .expect("the value is one of the enum's variants")
 }

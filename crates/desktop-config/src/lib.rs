@@ -4,6 +4,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+use strum::{EnumDiscriminants, EnumIter};
 use url::Url;
 use urldebloater_urlwasher::WasherConfig;
 
@@ -48,7 +49,11 @@ pub fn load_or_default() -> anyhow::Result<Config> {
         Err(err) if err.kind() == ErrorKind::NotFound => {
             let config = match migrate_legacy() {
                 Some(config) => {
-                    log::info!("Migrated {} to {}", LEGACY_CONFIG_FILE, config_path().display());
+                    log::info!(
+                        "Migrated {} to {}",
+                        LEGACY_CONFIG_FILE,
+                        config_path().display()
+                    );
                     config
                 }
                 None => Config::default(),
@@ -104,20 +109,22 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: SUPPORTED_VERSION,
-            redirect_wash_policy: RedirectWashPolicy::Locally,
+            redirect_wash_policy: RedirectWashPolicy::default(),
             clipboard_debloater: true,
             washer_config: WasherConfig::default(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 pub enum RedirectWashPolicy {
     /// Do not resolve redirection.
     Ignore,
     /// Resolve redirection locally.
     ///
     /// Exposes your IP address that can be corellated with you.
+    #[default]
     Locally,
     /// Resolve redirection using urldebloater-mixer.
     ///
@@ -127,28 +134,10 @@ pub enum RedirectWashPolicy {
 }
 
 impl RedirectWashPolicy {
-    /// Discriminant as an index, for UI combo boxes. [`mixer_url`] returns the URL
-    /// for [`RedirectWashPolicy::ViaMixer`]; both are consistent with [`from_index`].
-    pub fn index(&self) -> usize {
-        match self {
-            RedirectWashPolicy::Ignore => 0,
-            RedirectWashPolicy::Locally => 1,
-            RedirectWashPolicy::ViaMixer { .. } => 2,
-        }
-    }
-
     pub fn mixer_url(&self) -> Option<&Url> {
         match self {
             RedirectWashPolicy::ViaMixer { mixer_url } => Some(mixer_url),
             _ => None,
-        }
-    }
-
-    pub fn from_index(index: usize, mixer_url: Url) -> Self {
-        match index {
-            0 => RedirectWashPolicy::Ignore,
-            1 => RedirectWashPolicy::Locally,
-            _ => RedirectWashPolicy::ViaMixer { mixer_url },
         }
     }
 }
@@ -179,7 +168,6 @@ mod tests {
 
         let loaded = load_from(&path).unwrap();
         assert_eq!(loaded, config);
-        assert_eq!(loaded.redirect_wash_policy.index(), 2);
     }
 
     #[test]
@@ -199,25 +187,16 @@ mod tests {
     }
 
     #[test]
-    fn policy_index_roundtrip() {
+    fn mixer_url_reports_only_the_mixer_policy() {
         let url = Url::parse("https://example.com/mixer").unwrap();
-        for (index, policy) in [
-            (0, RedirectWashPolicy::Ignore),
-            (1, RedirectWashPolicy::Locally),
-            (2, RedirectWashPolicy::ViaMixer { mixer_url: url.clone() }),
-        ] {
-            assert_eq!(policy.index(), index);
-            assert_eq!(RedirectWashPolicy::from_index(index, url.clone()), policy);
-        }
+        assert_eq!(RedirectWashPolicy::Ignore.mixer_url(), None);
+        assert_eq!(RedirectWashPolicy::Locally.mixer_url(), None);
         assert_eq!(
-            RedirectWashPolicy::Ignore.mixer_url().map(Url::as_str),
-            None
-        );
-        assert_eq!(
-            RedirectWashPolicy::ViaMixer { mixer_url: url.clone() }
-                .mixer_url()
-                .map(Url::as_str),
-            Some("https://example.com/mixer")
+            RedirectWashPolicy::ViaMixer {
+                mixer_url: url.clone()
+            }
+            .mixer_url(),
+            Some(&url)
         );
     }
 

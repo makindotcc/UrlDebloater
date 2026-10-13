@@ -11,6 +11,7 @@ use log::debug;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroUsize, sync::Mutex};
+use strum::EnumIter;
 use url::Url;
 
 pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
@@ -118,8 +119,9 @@ pub struct WasherConfig {
     pub twitter_policy: TwitterPolicy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, EnumIter)]
 pub enum TwitterPolicy {
+    #[default]
     Original,
     VxTwitter,
     FxTwitter,
@@ -128,7 +130,7 @@ pub enum TwitterPolicy {
 impl Default for WasherConfig {
     fn default() -> Self {
         Self {
-            twitter_policy: TwitterPolicy::Original,
+            twitter_policy: TwitterPolicy::default(),
         }
     }
 }
