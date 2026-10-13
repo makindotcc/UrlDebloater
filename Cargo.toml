@@ -31,7 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
 notify = "8.2"
-winio = { version = "0.12", default-features = false }
+mitsuami = "1.1"
 
 [profile.release]
 codegen-units = 1

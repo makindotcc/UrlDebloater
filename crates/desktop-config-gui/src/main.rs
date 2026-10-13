@@ -2,18 +2,18 @@
 //! application itself does not pay for the GUI runtime while the window is closed.
 
 use anyhow::{Context, Result};
+use mitsuami::prelude::*;
 use std::path::PathBuf;
 use strum::IntoEnumIterator;
 use url::Url;
 use urldebloater_desktop_config::{Config, RedirectWashPolicy, RedirectWashPolicyDiscriminants};
 use urldebloater_urlwasher::{TwitterPolicy, WasherConfig};
-use winio::prelude::*;
 
-const MARGIN: f64 = 12.0;
-const ROW_HEIGHT: f64 = 34.0;
-const WINDOW_WIDTH: f64 = 560.0;
-const WINDOW_HEIGHT: f64 = 320.0;
-const LABEL_WIDTH: f64 = 170.0;
+const WINDOW_WIDTH: f32 = 560.0;
+const WINDOW_HEIGHT: f32 = 320.0;
+const LABEL_WIDTH: f32 = 170.0;
+/// Where a mixer policy points when the field is empty and the old config has none.
+const DEFAULT_MIXER_URL: &str = "https://urldebloater.makin.cc";
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -28,9 +28,24 @@ fn main() -> Result<()> {
         }
     };
 
-    App::builder()
-        .build()?
-        .block_on(ConfigWindow::run_until_event((path, config)))
+    // The window is the app: Save and Cancel close it, and the process ends with it.
+    // The signals are handles (`Copy`), so the closures a view body builds can stay
+    // `Fn` whatever they carry.
+    let open = signal(true);
+    let path = signal(path);
+    let config = signal(config);
+    App::new()
+        .id("com.urldebloater.Config")
+        .name("UrlDebloater Configuration")
+        .open(move || {
+            Window::new("UrlDebloater Configuration")
+                .size(Size::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+                .resizable(false)
+                .bind(open)
+                .content(move || config_form(open, path, config))
+        })
+        .run();
+    Ok(())
 }
 
 fn config_path_from_args() -> Result<PathBuf> {
@@ -44,278 +59,132 @@ fn config_path_from_args() -> Result<PathBuf> {
     Ok(urldebloater_desktop_config::config_path())
 }
 
-struct ConfigWindow {
-    path: PathBuf,
-    config: Config,
-    window: Child<Window>,
-    debloat: Child<CheckBox>,
-    policy_label: Child<Label>,
-    policy: Child<ComboBox>,
-    mixer_label: Child<Label>,
-    mixer: Child<Edit>,
-    twitter_label: Child<Label>,
-    twitter: Child<ComboBox>,
-    save: Child<Button>,
-    cancel: Child<Button>,
-}
+/// The form, one signal per field so each widget binds to it.
+fn config_form(open: Signal<bool>, path: Signal<PathBuf>, saved: Signal<Config>) -> impl View {
+    let config = saved.get_untracked();
+    let debloat = signal(config.clipboard_debloater);
+    let policy = signal(RedirectWashPolicyDiscriminants::from(
+        &config.redirect_wash_policy,
+    ));
+    let mixer = signal(
+        config
+            .redirect_wash_policy
+            .mixer_url()
+            .map_or_else(String::new, Url::to_string),
+    );
+    let twitter = signal(config.washer_config.twitter_policy);
 
-#[derive(Debug)]
-enum Message {
-    Noop,
-    PolicyChanged,
-    Save,
-    Cancel,
-}
-
-impl Component for ConfigWindow {
-    type Error = anyhow::Error;
-    type Event = ();
-    type Init<'a> = (PathBuf, Config);
-    type Message = Message;
-
-    async fn init((path, config): Self::Init<'_>, _sender: &ComponentSender<Self>) -> Result<Self> {
-        init! {
-            window: Window = (()) => {
-                text: "UrlDebloater Configuration",
-                size: Size::new(WINDOW_WIDTH, WINDOW_HEIGHT),
-            },
-            debloat: CheckBox = (&window) => {
-                text: "Debloat clipboard",
-            },
-            policy_label: Label = (&window) => {
-                text: "Redirect wash policy",
-            },
-            policy: ComboBox = (&window),
-            mixer_label: Label = (&window) => {
-                text: "Mixer URL",
-            },
-            mixer: Edit = (&window),
-            twitter_label: Label = (&window) => {
-                text: "Twitter policy",
-            },
-            twitter: ComboBox = (&window),
-            save: Button = (&window) => {
-                text: "Save",
-            },
-            cancel: Button = (&window) => {
-                text: "Cancel",
-            },
-        }
-
-        debloat.set_checked(config.clipboard_debloater)?;
-        policy.set_items(RedirectWashPolicyDiscriminants::iter().map(redirect_wash_label))?;
-        policy.set_selection(combo_index(
-            RedirectWashPolicyDiscriminants::iter(),
-            &RedirectWashPolicyDiscriminants::from(&config.redirect_wash_policy),
-        ))?;
-        mixer.set_text(
-            config
-                .redirect_wash_policy
-                .mixer_url()
-                .map_or("", Url::as_str),
-        )?;
-        twitter.set_items(TwitterPolicy::iter().map(|policy| twitter_policy_label(&policy)))?;
-        twitter.set_selection(combo_index(
-            TwitterPolicy::iter(),
-            &config.washer_config.twitter_policy,
-        ))?;
-
-        window.show()?;
-
-        Ok(Self {
-            path,
-            config,
-            window,
-            debloat,
-            policy_label,
-            policy,
-            mixer_label,
-            mixer,
-            twitter_label,
-            twitter,
-            save,
-            cancel,
-        })
-    }
-
-    async fn start(&mut self, sender: &ComponentSender<Self>) -> ! {
-        start! {
-            sender,
-            default: Message::Noop,
-            self.window => {
-                WindowEvent::Close => Message::Cancel,
-            },
-            self.debloat => {
-                CheckBoxEvent::Click => Message::Noop,
-            },
-            self.policy => {
-                ComboBoxEvent::Select => Message::PolicyChanged,
-                ComboBoxEvent::Change => Message::PolicyChanged,
-            },
-            self.mixer => {
-                EditEvent::Change => Message::Noop,
-            },
-            self.twitter => {
-                ComboBoxEvent::Select => Message::Noop,
-                ComboBoxEvent::Change => Message::Noop,
-            },
-            self.save => {
-                ButtonEvent::Click => Message::Save,
-            },
-            self.cancel => {
-                ButtonEvent::Click => Message::Cancel,
-            },
-        }
-    }
-
-    async fn update_children(&mut self) -> Result<bool> {
-        update_children!(
-            self.window,
-            self.debloat,
-            self.policy_label,
-            self.policy,
-            self.mixer_label,
-            self.mixer,
-            self.twitter_label,
-            self.twitter,
-            self.save,
-            self.cancel,
-        )
-    }
-
-    async fn update(
-        &mut self,
-        message: Self::Message,
-        sender: &ComponentSender<Self>,
-    ) -> Result<bool> {
-        log::debug!("message: {message:?}");
-        match message {
-            Message::Noop => Ok(false),
-            Message::PolicyChanged => Ok(true),
-            Message::Save => {
-                let config = self.collect_config()?;
-                urldebloater_desktop_config::save_to(&self.path, &config)
-                    .with_context(|| format!("save {}", self.path.display()))?;
-                log::info!("Saved configuration to {}", self.path.display());
-                sender.output(());
-                Ok(false)
-            }
-            Message::Cancel => {
-                sender.output(());
-                Ok(false)
+    // The mixer URL only matters for the mixer policy.
+    let mixer_enabled = move || policy.get() == RedirectWashPolicyDiscriminants::ViaMixer;
+    let save = move || {
+        let saved_config = saved.get_untracked();
+        let result =
+            collect_config(&saved_config, debloat, policy, mixer, twitter).and_then(|config| {
+                let path = path.get_untracked();
+                urldebloater_desktop_config::save_to(&path, &config)?;
+                log::info!("Saved configuration to {}", path.display());
+                Ok(())
+            });
+        match result {
+            Ok(()) => open.set(false),
+            Err(err) => {
+                log::error!("Failed to save configuration: {err:#}");
+                let message = format!("{err:#}");
+                spawn_local(async move {
+                    let _ = alert(
+                        Alert::new("Could not save the configuration")
+                            .message(message)
+                            .button("OK"),
+                    )
+                    .await;
+                });
             }
         }
-    }
+    };
 
-    fn render(&mut self, _sender: &ComponentSender<Self>) -> Result<()> {
-        let size = self.window.client_size()?;
-        log::debug!("render: client size {size:?}");
-        let width = (size.width - MARGIN * 2.0).max(0.0);
-        let field_x = MARGIN + LABEL_WIDTH;
-        let field_width = (width - LABEL_WIDTH).max(0.0);
-        let mut y = MARGIN;
-
-        self.debloat.set_rect(Rect::new(
-            Point::new(MARGIN, y),
-            Size::new(width, ROW_HEIGHT),
-        ))?;
-        y += ROW_HEIGHT;
-
-        self.policy_label.set_rect(Rect::new(
-            Point::new(MARGIN, y),
-            Size::new(LABEL_WIDTH, ROW_HEIGHT),
-        ))?;
-        self.policy.set_rect(Rect::new(
-            Point::new(field_x, y),
-            Size::new(field_width, ROW_HEIGHT),
-        ))?;
-        y += ROW_HEIGHT;
-
-        // The mixer URL only matters for the mixer policy.
-        let mixer_enabled = combo_value(
-            RedirectWashPolicyDiscriminants::iter(),
-            self.policy.selection()?,
-        ) == RedirectWashPolicyDiscriminants::ViaMixer;
-        self.mixer_label.set_enabled(mixer_enabled)?;
-        self.mixer.set_enabled(mixer_enabled)?;
-        self.mixer_label.set_rect(Rect::new(
-            Point::new(MARGIN, y),
-            Size::new(LABEL_WIDTH, ROW_HEIGHT),
-        ))?;
-        self.mixer.set_rect(Rect::new(
-            Point::new(field_x, y),
-            Size::new(field_width, ROW_HEIGHT),
-        ))?;
-        y += ROW_HEIGHT;
-
-        self.twitter_label.set_rect(Rect::new(
-            Point::new(MARGIN, y),
-            Size::new(LABEL_WIDTH, ROW_HEIGHT),
-        ))?;
-        self.twitter.set_rect(Rect::new(
-            Point::new(field_x, y),
-            Size::new(field_width, ROW_HEIGHT),
-        ))?;
-
-        let buttons_y = (size.height - MARGIN - ROW_HEIGHT).max(y + ROW_HEIGHT);
-        let button_width = 100.0;
-        self.save.set_rect(Rect::new(
-            Point::new(MARGIN + width - button_width * 2.0 - MARGIN, buttons_y),
-            Size::new(button_width, ROW_HEIGHT),
-        ))?;
-        self.cancel.set_rect(Rect::new(
-            Point::new(MARGIN + width - button_width, buttons_y),
-            Size::new(button_width, ROW_HEIGHT),
-        ))?;
-        Ok(())
-    }
-
-    fn render_children(&mut self) -> Result<()> {
-        Ok(self.window.render()?)
-    }
-}
-
-impl ConfigWindow {
-    fn collect_config(&self) -> Result<Config> {
-        let mixer_url = match self.mixer.text() {
-            Ok(text) if !text.trim().is_empty() => {
-                Url::parse(text.trim()).context("mixer URL is not a valid URL")?
-            }
-            _ => self
-                .config
-                .redirect_wash_policy
-                .mixer_url()
-                .cloned()
-                .unwrap_or_else(|| {
-                    Url::parse("https://urldebloater.makin.cc").expect("static URL")
-                }),
-        };
-
-        Ok(Config {
-            clipboard_debloater: self.debloat.is_checked()?,
-            redirect_wash_policy: {
-                let discriminant = combo_value(
-                    RedirectWashPolicyDiscriminants::iter(),
-                    self.policy.selection()?,
-                );
-                match discriminant {
-                    RedirectWashPolicyDiscriminants::Ignore => RedirectWashPolicy::Ignore,
-                    RedirectWashPolicyDiscriminants::Locally => RedirectWashPolicy::Locally,
-                    RedirectWashPolicyDiscriminants::ViaMixer => {
-                        RedirectWashPolicy::ViaMixer { mixer_url }
+    view! {
+        <Column padding=Spacing::Xl gap=Spacing::Md>
+            <Checkbox bind=debloat>"Debloat clipboard"</Checkbox>
+            <Row gap=Spacing::Md align=Align::Center>
+                <Text width=LABEL_WIDTH>"Redirect wash policy"</Text>
+                <Select
+                    label="Redirect wash policy"
+                    options=move || policy_labels()
+                    selected=move || {
+                        combo_index(RedirectWashPolicyDiscriminants::iter(), &policy.get())
                     }
-                }
-            },
-            washer_config: WasherConfig {
-                twitter_policy: combo_value(TwitterPolicy::iter(), self.twitter.selection()?),
-            },
-            ..self.config.clone()
-        })
+                    @change=move |index| {
+                        policy.set(combo_value(RedirectWashPolicyDiscriminants::iter(), index))
+                    }
+                />
+            </Row>
+            <Row gap=Spacing::Md align=Align::Center>
+                <Text width=LABEL_WIDTH>"Mixer URL"</Text>
+                <TextInput a11y_label="Mixer URL" bind=mixer enabled=mixer_enabled/>
+            </Row>
+            <Row gap=Spacing::Md align=Align::Center>
+                <Text width=LABEL_WIDTH>"Twitter policy"</Text>
+                <Select
+                    label="Twitter policy"
+                    options=move || twitter_labels()
+                    selected=move || combo_index(TwitterPolicy::iter(), &twitter.get())
+                    @change=move |index| twitter.set(combo_value(TwitterPolicy::iter(), index))
+                />
+            </Row>
+            <Row gap=Spacing::Sm justify=Justify::End>
+                <Button role=ButtonRole::Cancel @click=move || open.set(false)>"Cancel"</Button>
+                <Button role=ButtonRole::Default @click=save>"Save"</Button>
+            </Row>
+        </Column>
     }
 }
 
-fn redirect_wash_label(option: RedirectWashPolicyDiscriminants) -> &'static str {
-    match option {
+fn collect_config(
+    saved: &Config,
+    debloat: Signal<bool>,
+    policy: Signal<RedirectWashPolicyDiscriminants>,
+    mixer: Signal<String>,
+    twitter: Signal<TwitterPolicy>,
+) -> Result<Config> {
+    let mixer_url = match mixer.get_untracked() {
+        text if !text.trim().is_empty() => {
+            Url::parse(text.trim()).context("mixer URL is not a valid URL")?
+        }
+        _ => saved
+            .redirect_wash_policy
+            .mixer_url()
+            .cloned()
+            .unwrap_or_else(|| Url::parse(DEFAULT_MIXER_URL).expect("static URL")),
+    };
+
+    Ok(Config {
+        clipboard_debloater: debloat.get_untracked(),
+        redirect_wash_policy: match policy.get_untracked() {
+            RedirectWashPolicyDiscriminants::Ignore => RedirectWashPolicy::Ignore,
+            RedirectWashPolicyDiscriminants::Locally => RedirectWashPolicy::Locally,
+            RedirectWashPolicyDiscriminants::ViaMixer => RedirectWashPolicy::ViaMixer { mixer_url },
+        },
+        washer_config: WasherConfig {
+            twitter_policy: twitter.get_untracked(),
+        },
+        ..saved.clone()
+    })
+}
+
+fn policy_labels() -> Vec<String> {
+    RedirectWashPolicyDiscriminants::iter()
+        .map(|policy| redirect_wash_label(policy).to_owned())
+        .collect()
+}
+
+fn twitter_labels() -> Vec<String> {
+    TwitterPolicy::iter()
+        .map(|policy| twitter_policy_label(&policy).to_owned())
+        .collect()
+}
+
+fn redirect_wash_label(policy: RedirectWashPolicyDiscriminants) -> &'static str {
+    match policy {
         RedirectWashPolicyDiscriminants::Ignore => "Ignore redirects",
         RedirectWashPolicyDiscriminants::Locally => "Resolve redirects locally",
         RedirectWashPolicyDiscriminants::ViaMixer => "Resolve via mixer",
@@ -330,10 +199,8 @@ fn twitter_policy_label(policy: &TwitterPolicy) -> &'static str {
     }
 }
 
-fn combo_value<T: Default>(mut options: impl Iterator<Item = T>, selection: Option<usize>) -> T {
-    selection
-        .and_then(|index| options.nth(index))
-        .unwrap_or_default()
+fn combo_value<T: Default>(mut options: impl Iterator<Item = T>, selection: usize) -> T {
+    options.nth(selection).unwrap_or_default()
 }
 
 fn combo_index<T: PartialEq>(mut options: impl Iterator<Item = T>, wanted: &T) -> usize {

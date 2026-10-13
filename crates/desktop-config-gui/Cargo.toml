@@ -11,12 +11,4 @@ log.workspace = true
 env_logger.workspace = true
 url.workspace = true
 strum.workspace = true
-
-[target.'cfg(target_os = "linux")'.dependencies]
-winio = { workspace = true, features = ["qt"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-winio = { workspace = true, features = ["winui"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-winio.workspace = true
+mitsuami.workspace = true

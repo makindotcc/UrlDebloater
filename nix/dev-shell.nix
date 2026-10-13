@@ -17,7 +17,9 @@ pkgs.mkShell {
     pkgs.gdk-pixbuf
     pkgs.glib
     pkgs.gtk3
+    pkgs.gtk4
     pkgs.harfbuzz
+    pkgs.libadwaita
     pkgs.libappindicator-gtk3
     pkgs.libx11
     pkgs.libxcursor
@@ -41,6 +43,7 @@ pkgs.mkShell {
       pkgs.gtk3
       pkgs.gtk4
       pkgs.harfbuzz
+      pkgs.libadwaita
       pkgs.libappindicator-gtk3
       pkgs.libx11
       pkgs.libxcursor

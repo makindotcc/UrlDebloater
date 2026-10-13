@@ -164,7 +164,11 @@ impl App {
             return;
         };
         let path = urldebloater_desktop_config::config_path();
-        match std::process::Command::new(&exe).arg("--config").arg(&path).spawn() {
+        match std::process::Command::new(&exe)
+            .arg("--config")
+            .arg(&path)
+            .spawn()
+        {
             Ok(mut child) => {
                 // The application outlives the window, so reap the child instead of
                 // leaving a zombie behind.
