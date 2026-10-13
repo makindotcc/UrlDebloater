@@ -8,6 +8,7 @@ pkgs.mkShell {
     pkgs.rust-analyzer
     pkgs.rustc
     pkgs.rustPlatform.rustLibSrc
+    pkgs.wild
   ];
   buildInputs = [
     pkgs.atk

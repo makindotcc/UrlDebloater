@@ -18,12 +18,18 @@
       cargoLock = {
         lockFile = ./Cargo.lock;
       };
+      stdenv = pkgs.useWildLinker pkgs.stdenv;
+      rustPlatform = pkgs.makeRustPlatform {
+        inherit (pkgs) cargo rustc;
+        inherit stdenv;
+      };
       mixerOutput = import ./nix/mixer.nix {
         inherit
           self
           pkgs
           src
           cargoLock
+          rustPlatform
           ;
       };
     in
@@ -35,6 +41,7 @@
             pkgs
             src
             cargoLock
+            rustPlatform
             ;
         };
         default = mixer;

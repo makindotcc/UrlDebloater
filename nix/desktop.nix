@@ -2,9 +2,10 @@
   pkgs,
   src,
   cargoLock,
+  rustPlatform,
 }:
 
-pkgs.rustPlatform.buildRustPackage {
+rustPlatform.buildRustPackage {
   pname = "urldebloater";
   version = "0.1.4";
   inherit src cargoLock;

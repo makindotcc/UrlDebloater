@@ -3,12 +3,13 @@
   pkgs,
   src,
   cargoLock,
+  rustPlatform,
 }:
 
 let
   serviceName = "urldebloater-mixer";
 
-  package = pkgs.rustPlatform.buildRustPackage {
+  package = rustPlatform.buildRustPackage {
     pname = "urldebloater-mixer";
     version = "0.1.2";
     inherit src cargoLock;
