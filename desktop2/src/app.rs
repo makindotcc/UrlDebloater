@@ -1,18 +1,19 @@
-use crate::{
-    clipboard::ClipboardService,
-    config::{self, Config, RedirectWashPolicy},
-    tray,
-};
+use crate::{clipboard::ClipboardService, tray};
 use anyhow::{Context, anyhow};
 use arboard::Clipboard;
 use log::{error, info};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     pin::Pin,
-    sync::Arc,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
     time::{Duration, Instant},
 };
 use tokio::{select, sync::mpsc, time::Interval};
+use urldebloater_config::{self as config, Config, RedirectWashPolicy};
 use urlwasher::{
     UrlWasher,
     redirect_resolver::{
@@ -26,6 +27,7 @@ pub(crate) const CLIPBOARD_PAUSE_DURATION: Duration = Duration::from_secs(30);
 struct App {
     config: Config,
     clipboard_service: ClipboardService,
+    config_gui_running: Arc<AtomicBool>,
     text_washer: Arc<TextWasher>,
     wash_task: Option<Pin<Box<dyn Future<Output = String> + Send>>>,
     app_event_tx: mpsc::Sender<AppEvent>,
@@ -47,6 +49,7 @@ impl App {
             text_washer: Arc::new(text_washer(&config)),
             config,
             clipboard_service,
+            config_gui_running: Arc::new(AtomicBool::new(false)),
             wash_task: None,
             clipboard_pause_state: None,
             app_event_tx,
@@ -75,6 +78,7 @@ impl App {
                         AppCommand::ClearClipboard => self.clear_clipboard(),
                         AppCommand::ToggleClipboardDebloater => self.toggle_clipboard_debloater(),
                         AppCommand::ReloadConfig => self.reload_config(),
+                        AppCommand::OpenConfigGui => self.open_config_gui(),
                         AppCommand::Exit => {
                             info!("Exiting application...");
                             break;
@@ -149,6 +153,40 @@ impl App {
             });
     }
 
+    fn open_config_gui(&self) {
+        if self.config_gui_running.swap(true, Ordering::Relaxed) {
+            info!("Configuration window is already open");
+            return;
+        }
+        let Some(exe) = config_gui_path() else {
+            error!("Configuration window not found next to the application binary");
+            self.config_gui_running.store(false, Ordering::Relaxed);
+            return;
+        };
+        let path = urldebloater_config::config_path();
+        match std::process::Command::new(&exe).arg("--config").arg(&path).spawn() {
+            Ok(mut child) => {
+                // The application outlives the window, so reap the child instead of
+                // leaving a zombie behind.
+                let running = Arc::clone(&self.config_gui_running);
+                tokio::task::spawn_blocking(move || {
+                    match child.wait() {
+                        Ok(status) if !status.success() => {
+                            error!("Configuration window exited with {status}");
+                        }
+                        Ok(_) => {}
+                        Err(err) => error!("Configuration window failed: {err}"),
+                    }
+                    running.store(false, Ordering::Relaxed);
+                });
+            }
+            Err(err) => {
+                self.config_gui_running.store(false, Ordering::Relaxed);
+                error!("Failed to start {}: {err}", exe.display());
+            }
+        }
+    }
+
     fn reload_config(&mut self) {
         info!("Reloading configuration...");
         match config::load_or_default() {
@@ -171,12 +209,60 @@ pub enum AppCommand {
     ClearClipboard,
     ToggleClipboardDebloater,
     ReloadConfig,
+    OpenConfigGui,
     Exit,
 }
 
 pub enum AppEvent {
     ClipboardPauseProgressUpdate { expires_at: Option<Instant> },
     Exit,
+}
+
+const RELOAD_DEBOUNCE: Duration = Duration::from_millis(300);
+const CONFIG_GUI_BIN: &str = "urldebloater-config-gui";
+
+fn config_gui_path() -> Option<std::path::PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let name = if cfg!(windows) {
+        format!("{CONFIG_GUI_BIN}.exe")
+    } else {
+        CONFIG_GUI_BIN.to_owned()
+    };
+    let path = dir.join(name);
+    path.is_file().then_some(path)
+}
+
+/// Reloads the config whenever the config window or the user rewrites the file.
+fn watch_config(command_tx: mpsc::Sender<AppCommand>) -> Option<RecommendedWatcher> {
+    let path = urldebloater_config::config_path();
+    let dir = path.parent()?.to_path_buf();
+    let watched = path;
+    let last_reload = Arc::new(Mutex::new(None::<Instant>));
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        let Ok(event) = event else {
+            return;
+        };
+        if !event.paths.iter().any(|event_path| *event_path == watched) {
+            return;
+        }
+        // Atomic replacement emits several events; one reload is enough.
+        let mut last = last_reload.lock().expect("config reload lock");
+        if last.is_some_and(|at| at.elapsed() < RELOAD_DEBOUNCE) {
+            return;
+        }
+        *last = Some(Instant::now());
+        drop(last);
+        if let Err(err) = command_tx.try_send(AppCommand::ReloadConfig) {
+            error!("Failed to queue config reload: {err}");
+        }
+    })
+    .map_err(|err| error!("Failed to watch {}: {err}", dir.display()))
+    .ok()?;
+    watcher
+        .watch(&dir, RecursiveMode::NonRecursive)
+        .map_err(|err| error!("Failed to watch {}: {err}", dir.display()))
+        .ok()?;
+    Some(watcher)
 }
 
 fn text_washer(config: &Config) -> TextWasher<DefaultRedirectResolver> {
@@ -197,6 +283,7 @@ pub fn run() -> anyhow::Result<()> {
     let (app_event_tx, app_event_rx) = mpsc::channel(16);
 
     let mut app = App::new(app_event_tx).context("initialize application")?;
+    let _config_watcher = watch_config(app_command_tx.clone());
 
     #[cfg(target_os = "linux")]
     {

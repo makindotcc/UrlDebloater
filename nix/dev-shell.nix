@@ -26,6 +26,8 @@ pkgs.mkShell {
     pkgs.libxinerama
     pkgs.libxrender
     pkgs.pango
+    pkgs.qt6.qtbase
+    pkgs.qt6.qtwayland
   ];
 
   env = {
@@ -36,6 +38,7 @@ pkgs.mkShell {
       pkgs.gdk-pixbuf
       pkgs.glib
       pkgs.gtk3
+      pkgs.gtk4
       pkgs.harfbuzz
       pkgs.libappindicator-gtk3
       pkgs.libx11
@@ -46,6 +49,8 @@ pkgs.mkShell {
       pkgs.libxinerama
       pkgs.libxrender
       pkgs.pango
+      pkgs.qt6.qtbase
+      pkgs.qt6.qtwayland
     ];
     RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
   };

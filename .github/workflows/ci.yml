@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: GTK4 for the configuration window
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+      - name: Build and test
+        run: |
+          cargo test -p urldebloater-config
+          cargo build --workspace --locked
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The window itself imports native WinUI 3 types, so only type-checking is
+      # meaningful without the Windows App SDK runtime.
+      - run: cargo check -p urldebloater-config-gui --locked
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo check -p urldebloater-config-gui --locked

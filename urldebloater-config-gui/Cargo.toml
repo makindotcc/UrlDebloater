@@ -1,0 +1,21 @@
+[package]
+name = "urldebloater-config-gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+urldebloater-config = { path = "../urldebloater-config" }
+urlwasher = { path = "../urlwasher" }
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+url = "2.5"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+winio = { version = "0.12", default-features = false, features = ["qt"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winio = { version = "0.12", default-features = false, features = ["winui"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+winio = { version = "0.12", default-features = false }

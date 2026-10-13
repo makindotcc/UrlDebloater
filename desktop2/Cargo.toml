@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 urlwasher = { path = "../urlwasher" }
+urldebloater-config = { path = "../urldebloater-config" }
 log = "0.4"
 arboard = { version = "3.6", default-features = false, features = [
     "wayland-data-control",

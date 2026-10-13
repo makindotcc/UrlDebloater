@@ -113,12 +113,12 @@ fn is_twitter_post_path(path: &str) -> bool {
     segments.len() >= 3 && segments[1] == "status"
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WasherConfig {
-    twitter_policy: TwitterPolicy,
+    pub twitter_policy: TwitterPolicy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TwitterPolicy {
     Original,
     VxTwitter,
