@@ -9,8 +9,12 @@
       nixpkgs,
     }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
+      linuxSystem = "x86_64-linux";
+      systems = [
+        linuxSystem
+        "aarch64-darwin"
+      ];
+      pkgs = import nixpkgs { system = linuxSystem; };
       src = pkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: _: (baseNameOf path) != "target";
@@ -34,7 +38,7 @@
       };
     in
     {
-      packages.${system} = rec {
+      packages.${linuxSystem} = rec {
         mixer = mixerOutput.package;
         desktop = import ./nix/desktop.nix {
           inherit
@@ -47,7 +51,11 @@
         default = mixer;
       };
 
-      devShells.${system}.default = import ./nix/dev-shell.nix { inherit pkgs; };
+      devShells = pkgs.lib.genAttrs systems (system: {
+        default = import ./nix/dev-shell.nix {
+          pkgs = import nixpkgs { inherit system; };
+        };
+      });
 
       nixosModules.default = mixerOutput.module;
     };
