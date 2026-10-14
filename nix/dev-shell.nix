@@ -25,6 +25,7 @@ let
     pkgs.pango
     pkgs.qt6.qtbase
     pkgs.qt6.qtwayland
+    pkgs.wayland
   ];
 in
 pkgs.mkShell {
