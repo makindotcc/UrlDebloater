@@ -151,7 +151,12 @@ pub mod cache {
     }
 
     async fn save_cache(path: &PathBuf, catalog: &DataCatalog) -> anyhow::Result<()> {
-        let tmp_path = path.with_extension(".tmp");
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .context("create cache directory")?;
+        }
+        let tmp_path = path.with_extension(format!(".tmp{}", std::process::id()));
         tokio::fs::write(
             &tmp_path,
             serde_json::to_string(&catalog).context("serialize catalog")?,
