@@ -1,12 +1,15 @@
-use anyhow::Context;
-use log::warn;
+use anyhow::anyhow;
+use anyhow::{ensure, Context};
+use log::{error, warn};
 use regex::Regex;
 use serde::de::{self, Deserializer};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::sync::OnceLock;
 use url::{form_urlencoded, Url};
 
+#[derive(Debug)]
 pub struct ClearUrls {
     catalog: DataCatalog,
 }
@@ -46,6 +49,120 @@ impl ClearUrls {
         };
         Ok(result)
     }
+
+    pub fn catalog(&self) -> &DataCatalog {
+        &self.catalog
+    }
+}
+
+pub trait CatalogLoader {
+    fn load_catalog(&self) -> impl Future<Output = anyhow::Result<DataCatalog>>;
+}
+
+pub struct ReqwestCatalogLoader;
+
+impl CatalogLoader for ReqwestCatalogLoader {
+    fn load_catalog(&self) -> impl Future<Output = anyhow::Result<DataCatalog>> {
+        async {
+            let response = reqwest::get("https://rules2.clearurls.xyz/data.minify.json")
+                .await
+                .context("get clearurls data")?;
+            ensure!(
+                response.status().is_success(),
+                "invalid clearurls data status code: {}",
+                response.status()
+            );
+            let catalog = response.text().await.context("get clearurls body")?;
+            let catalog = serde_json::from_str::<DataCatalog>(&catalog)
+                .context("deserialize clearurls data")?;
+            Ok(catalog)
+        }
+    }
+}
+
+#[cfg(feature = "cleanurls-cache")]
+pub mod cache {
+    use crate::clearurls::{CatalogLoader, DataCatalog};
+    use anyhow::Context;
+    use log::warn;
+    use std::{path::PathBuf, time::Duration};
+
+    pub async fn load(
+        loader: &impl CatalogLoader,
+        path: PathBuf,
+        max_age: Duration,
+    ) -> Result<DataCatalog, (DataCatalog, anyhow::Error)> {
+        match load_valid_cache(&path, max_age).await {
+            Ok(Some(cache)) => return Ok(cache),
+            Ok(None) => {}
+            Err(err) => {
+                warn!("failed to load cache: {:?}", err);
+            }
+        };
+        match loader.load_catalog().await {
+            Ok(new_catalog) => {
+                if let Err(err) = save_cache(&path, &new_catalog).await {
+                    warn!("failed to save new catalog to cache: {:?}", err);
+                };
+                Ok(new_catalog)
+            }
+            Err(err) => {
+                warn!("failed to load new catalog: {:?}", err);
+                match load_cache(&path).await {
+                    Ok(cache) => Err((cache, err)),
+                    Err(load_err) => {
+                        let default_catalog = DataCatalog::hardcoded();
+                        Err((
+                            default_catalog,
+                            load_err.context("load cache after failed catalog load"),
+                        ))
+                    }
+                }
+            }
+        }
+    }
+
+    /// Load the valid cache if it exists and is not outdated.
+    /// Returns `Ok(None)` if the cache is missing or outdated.
+    async fn load_valid_cache(
+        path: &PathBuf,
+        max_age: Duration,
+    ) -> anyhow::Result<Option<DataCatalog>> {
+        let cache_metadata = match tokio::fs::metadata(&path).await {
+            Ok(metadata) => metadata,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => return Err(err).context("get cache metadata"),
+        };
+        let modified_at = cache_metadata.modified().context("get modified date")?;
+        if modified_at.elapsed().unwrap_or_default() > max_age {
+            return Ok(None);
+        }
+        let catalog = load_cache(&path).await.context("load cache")?;
+        Ok(Some(catalog))
+    }
+
+    async fn load_cache(path: &PathBuf) -> anyhow::Result<DataCatalog> {
+        let catalog = tokio::fs::read_to_string(&path)
+            .await
+            .context("read cache file")?;
+        let catalog =
+            serde_json::from_str::<DataCatalog>(&catalog).context("deserialize cache data")?;
+        Ok(catalog)
+    }
+
+    async fn save_cache(path: &PathBuf, catalog: &DataCatalog) -> anyhow::Result<()> {
+        let tmp_path = path.with_extension(".tmp");
+        tokio::fs::write(
+            &tmp_path,
+            serde_json::to_string(&catalog).context("serialize catalog")?,
+        )
+        .await
+        .context("write catalog to cache")?;
+        tokio::fs::rename(&tmp_path, &path)
+            .await
+            .context("rename temporary cache file")?;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -56,16 +173,31 @@ pub enum ClearUrlResult {
     Blocked,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DataCatalog {
     pub providers: BTreeMap<String, Provider>,
 }
 
-#[derive(Debug, Deserialize)]
+impl DataCatalog {
+    fn hardcoded() -> Self {
+        serde_json::from_str(include_str!(concat!(
+            env!("CARGO_WORKSPACE_DIR"),
+            "assets/cleanurls_rules.json"
+        )))
+        .unwrap_or_else(|err| {
+            error!("Could not load hardcoded cleanurls rules: {err:?}");
+            Self {
+                providers: BTreeMap::new(),
+            }
+        })
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Provider {
     #[serde(deserialize_with = "deserialize_regex")]
-    pub url_pattern: Regex,
+    pub url_pattern: CompiledRegex,
     #[serde(default)]
     pub complete_provider: bool,
     #[serde(default)]
@@ -93,7 +225,7 @@ impl DataCatalog {
         let url = url.as_str();
         self.providers
             .values()
-            .filter(move |provider| provider.url_pattern.is_match(url))
+            .filter(move |provider| provider.url_pattern.compiled.is_match(url))
     }
 }
 
@@ -102,11 +234,11 @@ impl Provider {
         self.compiled_rules
             .get_or_init(|| compile_rules(self).map_err(|err| err.to_string()))
             .as_ref()
-            .map_err(|err| anyhow::anyhow!("{err}"))
+            .map_err(|err| anyhow!("{err}"))
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CompiledRules {
     rules: Vec<Regex>,
     raw_rules: Vec<Regex>,
@@ -193,12 +325,21 @@ fn compile_rules(provider: &Provider) -> anyhow::Result<CompiledRules> {
     })
 }
 
-fn deserialize_regex<'de, D>(deserializer: D) -> Result<Regex, D::Error>
+#[derive(Debug, Serialize, Clone)]
+#[serde(transparent)]
+pub struct CompiledRegex {
+    raw: String,
+    #[serde(skip)]
+    compiled: Regex,
+}
+
+fn deserialize_regex<'de, D>(deserializer: D) -> Result<CompiledRegex, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let pattern = String::deserialize(deserializer)?;
-    Regex::new(&pattern).map_err(de::Error::custom)
+    let raw = String::deserialize(deserializer)?;
+    let compiled = Regex::new(&raw).map_err(de::Error::custom)?;
+    Ok(CompiledRegex { raw, compiled })
 }
 
 #[cfg(test)]
@@ -208,11 +349,12 @@ mod tests {
 
     #[test]
     fn deserializes_clearurls_data_catalog() {
-        let catalog: DataCatalog = serde_json::from_str(include_str!("test_rules.json")).unwrap();
+        let catalog: DataCatalog =
+            serde_json::from_str(include_str!("../../../assets/cleanurls_rules.json")).unwrap();
 
         let amazon = catalog.provider("amazon").unwrap();
         assert_eq!(
-            amazon.url_pattern.as_str(),
+            amazon.url_pattern.compiled.as_str(),
             "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?amazon(?:\\.[a-z]{2,}){1,}"
         );
         assert!(!amazon.complete_provider);
@@ -238,7 +380,8 @@ mod tests {
 
     #[test]
     fn compiles_every_catalog_rules() {
-        let catalog: DataCatalog = serde_json::from_str(include_str!("test_rules.json")).unwrap();
+        let catalog: DataCatalog =
+            serde_json::from_str(include_str!("../../../assets/cleanurls_rules.json")).unwrap();
 
         for (name, provider) in &catalog.providers {
             provider
@@ -300,7 +443,9 @@ mod tests {
     }
 
     fn test_clear_urls() -> ClearUrls {
-        ClearUrls::new(serde_json::from_str(include_str!("test_rules.json")).unwrap())
+        ClearUrls::new(
+            serde_json::from_str(include_str!("../../../assets/cleanurls_rules.json")).unwrap(),
+        )
     }
 
     #[test]
@@ -322,5 +467,15 @@ mod tests {
         rules.clear_query(&mut url);
 
         assert_eq!(url.as_str(), "https://example.com/?q=hello%20world&flag");
+    }
+
+    #[test]
+    fn serializes_to_same_string() {
+        let raw_catalog = include_str!("../../../assets/cleanurls_rules.json");
+        let catalog: DataCatalog = serde_json::from_str(raw_catalog).unwrap();
+        let serialized = serde_json::to_string(&catalog).unwrap();
+        let deserialized: DataCatalog = serde_json::from_str(&serialized).unwrap();
+        let deserialized_raw = serde_json::to_string(&deserialized).unwrap();
+        assert_eq!(serialized, deserialized_raw);
     }
 }

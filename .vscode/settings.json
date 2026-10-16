@@ -1,5 +1,3 @@
 {
-    "terminal.integrated.env.linux": {
-        "GTK_PATH": ""
-    }
+  "rust-analyzer.cargo.allFeatures": true
 }

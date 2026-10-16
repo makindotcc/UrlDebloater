@@ -6,7 +6,7 @@ use std::{
 };
 use strum::{EnumDiscriminants, EnumIter};
 use url::Url;
-use urldebloater_urlwasher::WasherConfig;
+use urldebloater_urlwasher::TwitterPolicy;
 
 /// Config file name inside the platform config directory.
 const CONFIG_FILE: &str = "config.json";
@@ -102,7 +102,8 @@ pub struct Config {
     pub version: u32,
     pub redirect_wash_policy: RedirectWashPolicy,
     pub clipboard_debloater: bool,
-    pub washer_config: WasherConfig,
+    pub twitter_policy: TwitterPolicy,
+    pub use_clear_urls: bool,
 }
 
 impl Default for Config {
@@ -111,7 +112,8 @@ impl Default for Config {
             version: SUPPORTED_VERSION,
             redirect_wash_policy: RedirectWashPolicy::default(),
             clipboard_debloater: true,
-            washer_config: WasherConfig::default(),
+            twitter_policy: TwitterPolicy::default(),
+            use_clear_urls: true,
         }
     }
 }

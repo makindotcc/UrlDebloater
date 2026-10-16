@@ -4384,6 +4384,7 @@ dependencies = [
  "axum-macros",
  "http-body-util",
  "serde",
+ "serde_json",
  "tokio",
  "tower 0.4.13",
  "tower-http 0.5.2",

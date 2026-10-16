@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use strum::{IntoDiscriminant, IntoEnumIterator};
 use url::Url;
 use urldebloater_desktop_config::{Config, RedirectWashPolicy, RedirectWashPolicyDiscriminants};
-use urldebloater_urlwasher::{PUBLIC_MIXER_INSTANCE, TwitterPolicy, WasherConfig};
+use urldebloater_urlwasher::{PUBLIC_MIXER_INSTANCE, TwitterPolicy};
 
 const WINDOW_WIDTH: f32 = 560.0;
 const LABEL_WIDTH: f32 = 170.0;
@@ -89,8 +89,8 @@ impl From<Config> for FormDraft {
                 .redirect_wash_policy
                 .mixer_url()
                 .map_or_else(|| String::from(PUBLIC_MIXER_INSTANCE), Url::to_string),
-            use_clear_urls: config.washer_config.use_clear_urls,
-            twitter_policy: config.washer_config.twitter_policy,
+            use_clear_urls: config.use_clear_urls,
+            twitter_policy: config.twitter_policy,
         }
     }
 }
@@ -279,10 +279,8 @@ fn collect_config(saved: &Config, draft: &FormDraft) -> Result<Config> {
             RedirectWashPolicyDiscriminants::Ignore => RedirectWashPolicy::Ignore,
             RedirectWashPolicyDiscriminants::Locally => RedirectWashPolicy::Locally,
         },
-        washer_config: WasherConfig {
-            use_clear_urls: draft.use_clear_urls,
-            twitter_policy: draft.twitter_policy,
-        },
+        use_clear_urls: draft.use_clear_urls,
+        twitter_policy: draft.twitter_policy,
         ..saved.clone()
     })
 }

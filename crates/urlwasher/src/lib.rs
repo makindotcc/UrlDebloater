@@ -23,7 +23,6 @@ where
     R: RedirectResolver,
 {
     redirect_resolver: R,
-    clear_urls: ClearUrls,
     cache: Mutex<LruCache<Url, Option<Url>>>,
     config: WasherConfig,
 }
@@ -32,15 +31,8 @@ impl<R> UrlWasher<R>
 where
     R: RedirectResolver,
 {
-    pub fn new(redirect_resolver: impl Into<R>) -> Self {
-        Self::new_with_config(redirect_resolver, WasherConfig::default())
-    }
-
-    pub fn new_with_config(redirect_resolver: impl Into<R>, config: WasherConfig) -> Self {
+    pub fn new(redirect_resolver: impl Into<R>, config: WasherConfig) -> Self {
         Self {
-            clear_urls: ClearUrls::new(
-                serde_json::from_str(include_str!("test_rules.json")).unwrap(),
-            ),
             redirect_resolver: redirect_resolver.into(),
             cache: Mutex::new(LruCache::new(NonZeroUsize::new(1024).unwrap())),
             config,
@@ -58,14 +50,18 @@ where
         } else {
             url.clone()
         };
-        let clear_url = match self
-            .clear_urls
-            .clear(&clear_url)
-            .context("parse sanitized url")?
-        {
-            ClearUrlResult::Blocked => None,
-            ClearUrlResult::Cleaned(c) | ClearUrlResult::Redirected(c) => Some(c),
-            ClearUrlResult::Unchanged => Some(clear_url),
+        let clear_url = match &self.config.clear_urls {
+            Some(clear_urls) => {
+                match clear_urls
+                    .clear(&clear_url)
+                    .context("parse sanitized url")?
+                {
+                    ClearUrlResult::Blocked => None,
+                    ClearUrlResult::Cleaned(c) | ClearUrlResult::Redirected(c) => Some(c),
+                    ClearUrlResult::Unchanged => Some(clear_url),
+                }
+            }
+            None => Some(clear_url),
         };
         let clear_url = clear_url.map(|url| self.replace_host(&url)).transpose()?;
 
@@ -106,6 +102,10 @@ where
         }
         Ok(new_url)
     }
+
+    pub fn clear_urls(&self) -> Option<&ClearUrls> {
+        self.config.clear_urls.as_ref()
+    }
 }
 
 // https://fxtwitter.com/Foo/status/12345
@@ -114,9 +114,9 @@ fn is_twitter_post_path(path: &str) -> bool {
     segments.len() >= 3 && segments[1] == "status"
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct WasherConfig {
-    pub use_clear_urls: bool,
+    pub clear_urls: Option<ClearUrls>,
     pub twitter_policy: TwitterPolicy,
 }
 
@@ -126,15 +126,6 @@ pub enum TwitterPolicy {
     Original,
     VxTwitter,
     FxTwitter,
-}
-
-impl Default for WasherConfig {
-    fn default() -> Self {
-        Self {
-            use_clear_urls: true,
-            twitter_policy: TwitterPolicy::default(),
-        }
-    }
 }
 
 pub struct WashOptions {
@@ -150,8 +141,11 @@ impl Default for WashOptions {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::{is_twitter_post_path, RedirectResolver, UrlWasher, WashOptions};
+pub(crate) mod tests {
+    use crate::{
+        clearurls::ClearUrls, is_twitter_post_path, RedirectResolver, TwitterPolicy, UrlWasher,
+        WashOptions, WasherConfig,
+    };
     use anyhow::Context;
     use std::{collections::HashMap, future::Future};
     use url::Url;
@@ -172,9 +166,18 @@ mod tests {
         }
     }
 
+    pub(crate) fn test_urlwasher_config() -> WasherConfig {
+        WasherConfig {
+            clear_urls: Some(ClearUrls::new(
+                serde_json::from_str(include_str!("../../../assets/cleanurls_rules.json")).unwrap(),
+            )),
+            twitter_policy: TwitterPolicy::default(),
+        }
+    }
+
     #[tokio::test]
     async fn test_cleaning() {
-        let washer: UrlWasher<FakeRedirectResolver> = UrlWasher::new(FakeRedirectResolver {
+        let redirect_resolver = FakeRedirectResolver {
             redirects: HashMap::from_iter([
                 (
                     Url::parse("https://vm.tiktok.com/ZGJoJs8jb/").unwrap(),
@@ -187,7 +190,9 @@ mod tests {
                 ),
             ]),
             ..Default::default()
-        });
+        };
+        let washer: UrlWasher<FakeRedirectResolver> =
+            UrlWasher::new(redirect_resolver, test_urlwasher_config());
         let tests = [
             (
                 "https://youtu.be/lSwnPoo9ZK0?si=TrackingParamValue&t=65",

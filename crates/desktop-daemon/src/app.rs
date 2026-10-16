@@ -13,9 +13,10 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{select, sync::mpsc, time::Interval};
-use urldebloater_desktop_config::{self as config, Config, RedirectWashPolicy};
+use urldebloater_desktop_config::{self as config, Config, RedirectWashPolicy, config_dir};
 use urldebloater_urlwasher::{
-    UrlWasher,
+    UrlWasher, WasherConfig,
+    clearurls::{self, ClearUrls, ReqwestCatalogLoader},
     redirect_resolver::{
         DefaultRedirectResolver, WithMixerRedirectResolver, WithoutMixerRedirectResolver,
     },
@@ -40,13 +41,13 @@ struct ClipboardPauseState {
 }
 
 impl App {
-    fn new(app_event_tx: mpsc::Sender<AppEvent>) -> anyhow::Result<Self> {
+    async fn new(app_event_tx: mpsc::Sender<AppEvent>) -> anyhow::Result<Self> {
         let config = config::load_or_default()?;
         let clipboard = Clipboard::new().context("initialize clipboard")?;
         let clipboard_service = ClipboardService::new(clipboard);
-
+        let text_washer = app_text_washer(&config, None).await;
         Ok(Self {
-            text_washer: Arc::new(text_washer(&config)),
+            text_washer: Arc::new(text_washer),
             config,
             clipboard_service,
             config_gui_running: Arc::new(AtomicBool::new(false)),
@@ -60,10 +61,11 @@ impl App {
         loop {
             select! {
                 result = self.clipboard_service.poll(),
-                if self.config.clipboard_debloater &&
-                    self.clipboard_pause_state
-                        .as_ref()
-                        .map_or(true, |s| Instant::now() >= s.until) => {
+                    if self.config.clipboard_debloater &&
+                        self.clipboard_pause_state
+                            .as_ref()
+                            .map_or(true, |s| Instant::now() >= s.until)
+                => {
                     match result {
                         Ok(()) if self.config.clipboard_debloater => self.clear_clipboard(),
                         Ok(()) => continue,
@@ -77,7 +79,7 @@ impl App {
                     match tray_command {
                         AppCommand::ClearClipboard => self.clear_clipboard(),
                         AppCommand::ToggleClipboardDebloater => self.toggle_clipboard_debloater(),
-                        AppCommand::ReloadConfig => self.reload_config(),
+                        AppCommand::ReloadConfig => self.reload_config().await,
                         AppCommand::OpenConfigGui => self.open_config_gui(),
                         AppCommand::Exit => {
                             info!("Exiting application...");
@@ -86,13 +88,13 @@ impl App {
                     }
                 }
                 washed = async { self.wash_task.as_mut().unwrap().await },
-                if self.wash_task.is_some() => {
-                    self.wash_task = None;
-                    let current = self.clipboard_service.text();
-                    if washed != *current {
-                        let _ = self.clipboard_service.set_text(Arc::from(washed));
+                    if self.wash_task.is_some() => {
+                        self.wash_task = None;
+                        let current = self.clipboard_service.text();
+                        if washed != *current {
+                            let _ = self.clipboard_service.set_text(Arc::from(washed));
+                        }
                     }
-                }
                 Some(()) = async {
                     match self.clipboard_pause_state.as_mut() {
                         Some(state) => {
@@ -191,11 +193,11 @@ impl App {
         }
     }
 
-    fn reload_config(&mut self) {
+    async fn reload_config(&mut self) {
         info!("Reloading configuration...");
         match config::load_or_default() {
             Ok(config) => {
-                self.set_config(config);
+                self.set_config(config).await;
             }
             Err(err) => {
                 error!("Failed to reload configuration: {:?}", err);
@@ -203,9 +205,14 @@ impl App {
         }
     }
 
-    fn set_config(&mut self, config: Config) {
+    async fn set_config(&mut self, config: Config) {
         self.config = config;
-        self.text_washer = Arc::new(text_washer(&self.config));
+        let catalog = self
+            .text_washer
+            .url_washer
+            .clear_urls()
+            .map(|cu| cu.catalog());
+        self.text_washer = Arc::new(app_text_washer(&self.config, catalog).await);
     }
 }
 
@@ -269,7 +276,10 @@ fn watch_config(command_tx: mpsc::Sender<AppCommand>) -> Option<RecommendedWatch
     Some(watcher)
 }
 
-fn text_washer(config: &Config) -> TextWasher<DefaultRedirectResolver> {
+async fn app_text_washer(
+    config: &Config,
+    loaded_clear_urls: Option<&clearurls::DataCatalog>,
+) -> TextWasher<DefaultRedirectResolver> {
     let redirect_resolver = match &config.redirect_wash_policy {
         RedirectWashPolicy::Ignore => DefaultRedirectResolver::None,
         RedirectWashPolicy::Locally => WithoutMixerRedirectResolver::default().into(),
@@ -277,8 +287,33 @@ fn text_washer(config: &Config) -> TextWasher<DefaultRedirectResolver> {
             WithMixerRedirectResolver::new(mixer_url.clone()).into()
         }
     };
+    let clear_urls = if config.use_clear_urls {
+        match loaded_clear_urls {
+            Some(catalog) => Some(ClearUrls::new(catalog.clone())),
+            None => {
+                let catalog = clearurls::cache::load(
+                    &ReqwestCatalogLoader,
+                    config_dir().join("clearurls-cache.json"),
+                    Duration::from_secs(24 * 60 * 60),
+                )
+                .await
+                .unwrap_or_else(|(catalog, err)| {
+                    error!("Failed to load clearurls catalog from cache: {err:?}");
+                    catalog
+                });
+                Some(ClearUrls::new(catalog))
+            }
+        }
+    } else {
+        None
+    };
+
+    let washer_config = WasherConfig {
+        clear_urls,
+        twitter_policy: config.twitter_policy,
+    };
     TextWasher {
-        url_washer: UrlWasher::new_with_config(redirect_resolver, config.washer_config.clone()),
+        url_washer: UrlWasher::new(redirect_resolver, washer_config),
     }
 }
 
@@ -286,7 +321,6 @@ pub fn run() -> anyhow::Result<()> {
     let (app_command_tx, app_command_rx) = mpsc::channel(16);
     let (app_event_tx, app_event_rx) = mpsc::channel(16);
 
-    let mut app = App::new(app_event_tx).context("initialize application")?;
     let _config_watcher = watch_config(app_command_tx.clone());
 
     #[cfg(target_os = "linux")]
@@ -299,6 +333,9 @@ pub fn run() -> anyhow::Result<()> {
                     .build()
                     .unwrap();
                 let result = runtime.block_on(async move {
+                    let mut app = App::new(app_event_tx)
+                        .await
+                        .context("initialize application")?;
                     tokio::task::spawn(async move { app.run(app_command_rx).await });
                     tray::platform::run(app_command_tx, app_event_rx).await
                 });
@@ -321,6 +358,10 @@ pub fn run() -> anyhow::Result<()> {
                     .build()
                     .unwrap();
                 runtime.block_on(async move {
+                    let mut app = App::new(app_event_tx)
+                        .await
+                        .context("initialize application")?;
+
                     app.run(app_command_rx).await;
                 });
             })

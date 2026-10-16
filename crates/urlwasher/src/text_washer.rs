@@ -80,7 +80,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{RedirectResolver, UrlWasher};
+    use crate::{tests::test_urlwasher_config, RedirectResolver, UrlWasher};
     use anyhow::Context;
     use std::{
         collections::HashMap,
@@ -115,7 +115,7 @@ mod tests {
     #[tokio::test]
     pub async fn removes_tracking_without_counting_against_redirect_limit() {
         let text_washer: TextWasher<FakeRedirectResolver> = TextWasher {
-            url_washer: UrlWasher::new(FakeRedirectResolver::default()),
+            url_washer: UrlWasher::new(FakeRedirectResolver::default(), test_urlwasher_config()),
         };
 
         let dirty = (0..12)
@@ -145,10 +145,13 @@ mod tests {
             })
             .collect();
         let text_washer: TextWasher<FakeRedirectResolver> = TextWasher {
-            url_washer: UrlWasher::new(FakeRedirectResolver {
-                redirects,
-                calls: Arc::clone(&calls),
-            }),
+            url_washer: UrlWasher::new(
+                FakeRedirectResolver {
+                    redirects,
+                    calls: Arc::clone(&calls),
+                },
+                test_urlwasher_config(),
+            ),
         };
 
         let dirty = (0..12)
