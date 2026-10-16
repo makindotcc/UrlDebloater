@@ -51,6 +51,11 @@ in the running application; no restart is needed.
 A `config.json` in the working directory (where older versions kept it) is
 migrated on first start.
 
+Policy choices are iterable with `strum::IntoEnumIterator`:
+`urldebloater_urlwasher::TwitterPolicy::iter()` and
+`urldebloater_desktop_config::RedirectWashPolicyDiscriminants::iter()`.
+The settings window stores the redirect variant separately from the mixer URL.
+
 # Repository layout
 
 Crates live in `crates/`:

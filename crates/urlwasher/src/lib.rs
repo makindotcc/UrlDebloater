@@ -11,6 +11,7 @@ use log::debug;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroUsize, sync::Mutex};
+use strum::EnumIter;
 use url::Url;
 
 pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
@@ -115,10 +116,11 @@ fn is_twitter_post_path(path: &str) -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WasherConfig {
+    pub use_clear_urls: bool,
     pub twitter_policy: TwitterPolicy,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, EnumIter)]
 pub enum TwitterPolicy {
     #[default]
     Original,
@@ -129,6 +131,7 @@ pub enum TwitterPolicy {
 impl Default for WasherConfig {
     fn default() -> Self {
         Self {
+            use_clear_urls: true,
             twitter_policy: TwitterPolicy::default(),
         }
     }

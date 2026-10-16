@@ -4,6 +4,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+use strum::{EnumDiscriminants, EnumIter};
 use url::Url;
 use urldebloater_urlwasher::WasherConfig;
 
@@ -115,7 +116,8 @@ impl Default for Config {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter))]
 pub enum RedirectWashPolicy {
     /// Do not resolve redirection.
     Ignore,

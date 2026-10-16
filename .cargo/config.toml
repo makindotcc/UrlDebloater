@@ -1,2 +1,7 @@
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=wild"]
+
+# Anchors `include_bytes!` and friends at the workspace root, whatever a
+# crate's own depth is: `concat!(env!("CARGO_WORKSPACE_DIR"), "/assets/…")`.
+[env]
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
