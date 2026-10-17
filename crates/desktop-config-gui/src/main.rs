@@ -27,25 +27,21 @@ fn main() -> Result<()> {
     };
 
     let open = signal(true);
-    let path = signal(path);
     let config = signal(config);
     info!("Starting UrlDebloater Configuration GUI");
     App::new()
         .id("com.urldebloater.config")
         .name("UrlDebloater Configuration")
         .icon(AppIcon::bytes(
-            include_bytes!(concat!(
-                env!("CARGO_WORKSPACE_DIR"),
-                "/assets/tray_icon.png"
-            ))
-            .as_slice(),
+            include_bytes!(concat!(env!("CARGO_WORKSPACE_DIR"), "assets/icon/tray.png")).as_slice(),
         ))
         .open(move || {
+            let path = path.clone();
             Window::new("UrlDebloater Configuration")
                 .size(WindowSize::FollowHeight(WINDOW_WIDTH))
                 .resizable(false)
                 .bind(open)
-                .content(move || config_form(open, path, config))
+                .content(move || config_form(open, path.clone(), config))
         })
         .run();
     Ok(())
@@ -95,24 +91,18 @@ impl From<Config> for FormDraft {
     }
 }
 
-fn config_form(open: Signal<bool>, path: Signal<PathBuf>, saved: Signal<Config>) -> impl View {
+fn config_form(open: Signal<bool>, path: PathBuf, saved: Signal<Config>) -> impl View {
     let config = saved.get_untracked();
     let draft: Signal<FormDraft> = signal(config.into());
     let dirty = computed(move || saved.with(|saved| draft.with(|draft| draft.differs_from(saved))));
     let saving = signal(false);
 
-    let save_config = move |close: bool| {
-        if saving.get_untracked() {
-            return;
-        }
-        let saved_config = saved.get_untracked();
-        let draft_value = draft.get_untracked();
-        let path = path.get_untracked();
-        save_config(open, saved, saving, close, saved_config, draft_value, path);
-    };
     let reset_to_defaults = move || draft.set(Config::default().into());
-    let save = move || save_config(false);
-    let ok = move || save_config(true);
+    let save = {
+        let path = path.clone();
+        move || save_config(open, saved, saving, draft, false, path.clone())
+    };
+    let ok = move || save_config(open, saved, saving, draft, true, path.clone());
     let can_save = move || !saving.get() && dirty.get();
 
     view! {
@@ -188,11 +178,15 @@ fn save_config(
     open: Signal<bool>,
     saved: Signal<Config>,
     saving: Signal<bool>,
+    draft: Signal<FormDraft>,
     close: bool,
-    saved_config: Config,
-    draft_value: FormDraft,
     path: PathBuf,
 ) {
+    if saving.get_untracked() {
+        return;
+    }
+    let saved_config = saved.get_untracked();
+    let draft_value = draft.get_untracked();
     saving.set(true);
     spawn_local(async move {
         let result = spawn_blocking(move || -> Result<Config> {

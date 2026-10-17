@@ -9,7 +9,7 @@ urldebloater-desktop-config.workspace = true
 log.workspace = true
 arboard.workspace = true
 anyhow.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["process"] }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true

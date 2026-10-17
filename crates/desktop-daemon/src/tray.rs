@@ -31,7 +31,10 @@ pub(crate) mod platform {
     use std::time::Instant;
     use tokio::sync::mpsc;
 
-    const TRAY_ICON_ARGB: &[u8] = include_bytes!("tray_icon_32.argb");
+    const TRAY_ICON_ARGB: &[u8] = include_bytes!(concat!(
+        env!("CARGO_WORKSPACE_DIR"),
+        "assets/icon/tray_32.argb"
+    ));
 
     struct DebloaterTray {
         command_tx: mpsc::Sender<AppCommand>,

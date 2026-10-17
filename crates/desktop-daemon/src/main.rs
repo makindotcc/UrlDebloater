@@ -1,5 +1,6 @@
 mod app;
 mod clipboard;
+mod config_integration;
 mod tray;
 
 use log::info;
