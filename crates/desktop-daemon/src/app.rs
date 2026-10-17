@@ -1,5 +1,5 @@
 use crate::{clipboard::ClipboardService, config_integration, tray};
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use arboard::Clipboard;
 use log::{error, info};
 use std::{
@@ -281,16 +281,20 @@ pub fn run() -> anyhow::Result<()> {
                     .enable_all()
                     .build()
                     .unwrap();
-                runtime.block_on(async move {
+                let result: anyhow::Result<()> = runtime.block_on(async move {
                     let mut app = App::new(app_event_tx)
                         .await
                         .context("initialize application")?;
 
                     app.run(app_command_rx).await;
+                    Ok(())
                 });
+                if let Err(err) = result {
+                    error!("Application worker encountered an error: {:?}", err);
+                }
             })
             .context("spawn application worker")?;
-        tray::platform::run(app_command_tx, app_event_rx);
+        tray::platform::run(app_command_tx, app_event_rx).context("run tray platform")?;
     }
 
     info!("Application workers started");
