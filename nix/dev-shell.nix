@@ -38,7 +38,7 @@ pkgs.mkShell {
     pkgs.rustPlatform.rustLibSrc
   ] ++ lib.optionals isLinux [ pkgs.wild ];
 
-  buildInputs = lib.optionals isLinux linuxGuiLibraries;
+  buildInputs = lib.optionals isLinux linuxGuiLibraries ++ lib.optionals (!isLinux) [ pkgs.apple-sdk_26 ];
 
   env = {
     RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
