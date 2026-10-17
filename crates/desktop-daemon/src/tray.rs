@@ -176,9 +176,10 @@ mod platform {
         command_tx: mpsc::Sender<AppCommand>,
         mut event_rx: mpsc::Receiver<AppEvent>,
     ) -> anyhow::Result<()> {
-        let event_loop = EventLoop::<UserEvent>::with_user_event()
-            .build()
-            .context("create tray event loop")?;
+        let mut event_loop_builder = EventLoop::<UserEvent>::with_user_event();
+        #[cfg(target_os = "macos")]
+        event_loop_builder.with_activation_policy(ActivationPolicy::Accessory);
+        let event_loop = event_loop_builder.build().context("create tray event loop")?;
         event_loop.set_control_flow(ControlFlow::Wait);
 
         install_tray_icon_forwarder(&event_loop);
