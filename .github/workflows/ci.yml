@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: GTK4 for the configuration window
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev
+      - name: GTK4 and libadwaita for the configuration window
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
       - name: Build and test
         run: |
           cargo test -p urldebloater-desktop-config
