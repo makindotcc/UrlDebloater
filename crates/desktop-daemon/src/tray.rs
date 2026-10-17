@@ -152,7 +152,9 @@ pub(crate) mod platform {
 }
 
 #[cfg(not(target_os = "linux"))]
-mod platform {
+pub(crate) mod platform {
+    use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, pause_clipboard_title};
+    use crate::app::{AppCommand, AppEvent};
     use anyhow::Context;
     use log::{debug, error};
     use tokio::sync::mpsc;
@@ -166,11 +168,13 @@ mod platform {
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::WindowId,
     };
+    #[cfg(target_os = "macos")]
+    use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 
-    use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, pause_clipboard_title};
-    use crate::app::{AppCommand, AppEvent};
-
-    const TRAY_ICON_RGBA: &[u8] = include_bytes!("tray_icon_32.rgba");
+    const TRAY_ICON_RGBA: &[u8] = include_bytes!(concat!(
+        env!("CARGO_WORKSPACE_DIR"),
+        "assets/icon/tray_32.rgba"
+    ));
 
     pub fn run(
         command_tx: mpsc::Sender<AppCommand>,
@@ -347,7 +351,7 @@ mod platform {
             .with_menu(Box::new(menu))
             .with_tooltip(APP_NAME)
             .with_icon(create_icon()?)
-            .with_title(APP_NAME)
+            .with_icon_as_template(true)
             .build()
             .context("create tray icon")
     }
