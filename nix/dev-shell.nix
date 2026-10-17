@@ -44,5 +44,6 @@ pkgs.mkShell {
     RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
   } // lib.optionalAttrs isLinux {
     LD_LIBRARY_PATH = lib.makeLibraryPath linuxGuiLibraries;
+    CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=wild";
   };
 }
