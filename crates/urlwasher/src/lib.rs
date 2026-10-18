@@ -1,6 +1,11 @@
 pub mod clearurls;
+#[cfg(feature = "uniffi")]
+pub mod ffi;
 pub mod redirect_resolver;
 pub mod text_washer;
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
 
 use crate::{
     clearurls::{ClearUrlResult, ClearUrls},
@@ -11,7 +16,7 @@ use log::debug;
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::{num::NonZeroUsize, sync::Mutex};
-use strum::EnumIter;
+use strum::{EnumDiscriminants, EnumIter};
 use url::Url;
 
 pub const PUBLIC_MIXER_INSTANCE: &str = "https://urldebloater.makin.cc/";
@@ -114,6 +119,32 @@ fn is_twitter_post_path(path: &str) -> bool {
     segments.len() >= 3 && segments[1] == "status"
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default, EnumDiscriminants)]
+#[strum_discriminants(derive(EnumIter), cfg_attr(feature = "uniffi", derive(uniffi::Enum)))]
+pub enum RedirectWashPolicy {
+    /// Do not resolve redirection.
+    Ignore,
+    /// Resolve redirection locally.
+    ///
+    /// Exposes your IP address that can be corellated with you.
+    #[default]
+    Locally,
+    /// Resolve redirection using urldebloater-mixer.
+    ///
+    /// Exposes link to person who is running mixer instance you set
+    /// (not so scary for tiktoks tho).
+    ViaMixer { mixer_url: Url },
+}
+
+impl RedirectWashPolicy {
+    pub fn mixer_url(&self) -> Option<&Url> {
+        match self {
+            RedirectWashPolicy::ViaMixer { mixer_url } => Some(mixer_url),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct WasherConfig {
     pub clear_urls: Option<ClearUrls>,
@@ -121,6 +152,7 @@ pub struct WasherConfig {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, EnumIter)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum TwitterPolicy {
     #[default]
     Original,

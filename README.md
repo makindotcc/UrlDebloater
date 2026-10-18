@@ -67,8 +67,9 @@ Crates live in `crates/`:
 | `urldebloater-desktop-daemon` | desktop background process: clipboard, tray, spawning the settings window |
 | `urldebloater-desktop-config` | desktop settings model, config path and atomic persistence |
 | `urldebloater-desktop-config-gui` | the settings window (native widgets via winio) |
+| `urldebloater-android` | Android `cdylib`, JNI initialization and UniFFI binding generator |
 
-Platforms that will get their own crates later (`urldebloater-android`, `-ios`, `-web`) are not there
+Platforms that will get their own crates later (`urldebloater-ios`, `-web`) are not there
 yet; browser extensions are planned under `extensions/`.
 
 # Mobile platforms plans
@@ -85,6 +86,33 @@ https://github.com/makindotcc/UrlDebloater/assets/9150636/7e7de474-ffe9-49a2-ac8
 ## Android
 
 The settings screen uses Material 3 Expressive. Resetting settings to their defaults requires confirmation.
+The home screen washes arbitrary text through the same Rust implementation as desktop.
+
+### Native build
+
+Install an Android NDK, `cargo-ndk`, and the Rust standard libraries for the packaged ABIs:
+
+```sh
+rustup target add aarch64-linux-android x86_64-linux-android
+cargo install cargo-ndk
+```
+
+Set `ANDROID_NDK_HOME` if the NDK is not in Android Studio's default location, then build from
+`android/`:
+
+```sh
+./gradlew assembleDebug
+```
+
+Gradle generates the UniFFI Kotlin bindings and packages `liburldebloater.so` for `arm64-v8a`
+and `x86_64` at Android API 24. The generated sources and libraries stay under `app/build/generated/`.
+The `uniffi` feature on `urldebloater-urlwasher` exports the shared policy types and mobile API;
+it also enables `cleanurls-cache`.
+
+ClearURLs data is refreshed at most once every 24 hours and cached as `clearurls-cache.json` in
+the app's private files directory. A valid cache is used offline; the bundled catalog is the final
+fallback. Native calls use `Dispatchers.IO` because Android's certificate verifier may download
+CRLs through the JVM.
 
 ### Todo
 

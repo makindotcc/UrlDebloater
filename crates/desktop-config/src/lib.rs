@@ -4,9 +4,11 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
-use strum::{EnumDiscriminants, EnumIter};
+#[cfg(test)]
 use url::Url;
-use urldebloater_urlwasher::TwitterPolicy;
+pub use urldebloater_urlwasher::{
+    RedirectWashPolicy, RedirectWashPolicyDiscriminants, TwitterPolicy,
+};
 
 /// Config file name inside the platform config directory.
 const CONFIG_FILE: &str = "config.json";
@@ -114,32 +116,6 @@ impl Default for Config {
             clipboard_debloater: true,
             twitter_policy: TwitterPolicy::default(),
             use_clear_urls: true,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, Default, EnumDiscriminants)]
-#[strum_discriminants(derive(EnumIter))]
-pub enum RedirectWashPolicy {
-    /// Do not resolve redirection.
-    Ignore,
-    /// Resolve redirection locally.
-    ///
-    /// Exposes your IP address that can be corellated with you.
-    #[default]
-    Locally,
-    /// Resolve redirection using urldebloater-mixer.
-    ///
-    /// Exposes link to person who is running mixer instance you set
-    /// (not so scary for tiktoks tho).
-    ViaMixer { mixer_url: Url },
-}
-
-impl RedirectWashPolicy {
-    pub fn mixer_url(&self) -> Option<&Url> {
-        match self {
-            RedirectWashPolicy::ViaMixer { mixer_url } => Some(mixer_url),
-            _ => None,
         }
     }
 }

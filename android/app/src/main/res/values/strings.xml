@@ -2,12 +2,23 @@
     <string name="app_name" translatable="false">UrlDebloater</string>
     <string name="navbar_home">Home</string>
     <string name="navbar_settings">Settings</string>
-    <string name="greeting">Hello %1$s!</string>
+    <string name="home_title">Clean your links</string>
+    <string name="home_subtitle">Paste a link or a whole message and remove its trackers in one tap.</string>
+    <string name="home_input_label">Text with links</string>
+    <string name="home_input_placeholder">Paste a URL or text here</string>
+    <string name="home_output_label">Cleaned text</string>
+    <string name="home_output_placeholder">Your cleaned text will appear here</string>
+    <string name="home_wash_action">Clean</string>
+    <string name="home_clean_copy_action">Clean &amp; copy</string>
+    <string name="home_washing_action">Cleaning…</string>
+    <string name="home_wash_error">Unable to clean the text.</string>
+    <string name="home_copy_error">Text cleaned, but copying to the clipboard failed.</string>
+    <string name="home_copied_message">Cleaned text copied to clipboard</string>
     <string name="settings_section_general">General</string>
     <string name="settings_section_redirects">Redirects</string>
     <string name="settings_section_custom_domains">Custom domains</string>
     <string name="settings_clipboard_debloater">Debloat clipboard</string>
-    <string name="settings_use_clear_urls">Use Clear URLs database</string>
+    <string name="settings_use_clear_urls">Use ClearURLs database</string>
     <string name="settings_redirect_wash_policy">Redirect wash policy</string>
     <string name="settings_policy_ignore">Ignore redirects</string>
     <string name="settings_policy_locally">Resolve redirects locally</string>

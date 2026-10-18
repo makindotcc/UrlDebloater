@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,11 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import cc.makin.urldebloater.android.settings.SettingsScreen
 import cc.makin.urldebloater.android.settings.SettingsStore
 import cc.makin.urldebloater.android.ui.theme.UrlDebloaterTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,6 +71,17 @@ class MainActivity : ComponentActivity() {
 fun UrlDebloaterApp() {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
     val context = LocalContext.current
+    val settingsStore = remember { SettingsStore(context.applicationContext) }
+    var settings by remember { mutableStateOf(settingsStore.load()) }
+    val urlWasherAdapter = remember {
+        UrlWasherAdapter(File(context.filesDir, "clearurls-cache.json").absolutePath)
+    }
+
+    DisposableEffect(urlWasherAdapter) {
+        onDispose {
+            urlWasherAdapter.close()
+        }
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -90,17 +102,20 @@ fun UrlDebloaterApp() {
     ) {
         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
             when (currentDestination) {
-                AppDestinations.HOME ->
-                    Greeting(name = "Android", modifier = Modifier.padding(innerPadding))
+                AppDestinations.HOME -> HomeScreen(
+                    settings = settings,
+                    urlWasherAdapter = urlWasherAdapter,
+                    modifier = Modifier.padding(innerPadding),
+                )
 
-                AppDestinations.SETTINGS -> {
-                    val settingsStore = remember { SettingsStore(context.applicationContext) }
-                    SettingsScreen(
-                        initialSettings = remember { settingsStore.load() },
-                        onSettingsPersist = settingsStore::save,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                AppDestinations.SETTINGS -> SettingsScreen(
+                    initialSettings = settings,
+                    onSettingsPersist = { updatedSettings ->
+                        settingsStore.save(updatedSettings)
+                        settings = updatedSettings
+                    },
+                    modifier = Modifier.padding(innerPadding),
+                )
             }
         }
     }
@@ -114,18 +129,3 @@ enum class AppDestinations(
     SETTINGS(R.string.navbar_settings, R.drawable.ic_settings),
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(R.string.greeting, name),
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    UrlDebloaterTheme {
-        Greeting("Android")
-    }
-}

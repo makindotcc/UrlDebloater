@@ -1,0 +1,24 @@
+[package]
+name = "urldebloater-android"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "urldebloater"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+required-features = ["cli"]
+
+[features]
+cli = ["dep:uniffi", "uniffi/cli"]
+
+[dependencies]
+urldebloater-urlwasher = { workspace = true, features = ["uniffi"] }
+uniffi = { version = "0.32.2", optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22"
+rustls-platform-verifier = "0.7"

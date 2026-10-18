@@ -61,6 +61,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import cc.makin.urldebloater.android.R
+import cc.makin.urldebloater.android.rust.RedirectWashPolicyDiscriminants
+import cc.makin.urldebloater.android.rust.TwitterPolicy
 import cc.makin.urldebloater.android.ui.theme.UrlDebloaterTheme
 
 private const val DISABLED_CONTENT_ALPHA = 0.38f
@@ -141,7 +143,7 @@ fun SettingsScreen(
                     iconRes = R.drawable.ic_cloud,
                     title = stringResource(R.string.settings_mixer_url),
                     summary = settings.mixerUrl,
-                    enabled = settings.redirectWashPolicy == RedirectWashPolicy.VIA_MIXER,
+                    enabled = settings.redirectWashPolicy == RedirectWashPolicyDiscriminants.VIA_MIXER,
                     onClick = { openDialog = SettingsDialog.MIXER_URL },
                 )
             }
@@ -178,7 +180,7 @@ fun SettingsScreen(
     when (openDialog) {
         SettingsDialog.REDIRECT_POLICY -> SingleChoiceDialog(
             title = stringResource(R.string.settings_redirect_wash_policy),
-            options = RedirectWashPolicy.entries,
+            options = RedirectWashPolicyDiscriminants.entries,
             selected = settings.redirectWashPolicy,
             optionLabel = { stringResource(it.labelRes) },
             supportingText = stringResource(R.string.settings_policy_via_mixer_privacy_notice),

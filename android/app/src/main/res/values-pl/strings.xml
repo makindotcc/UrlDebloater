@@ -1,12 +1,23 @@
 <resources>
     <string name="navbar_home">Główna</string>
     <string name="navbar_settings">Ustawienia</string>
-    <string name="greeting">Cześć, %1$s!</string>
+    <string name="home_title">Oczyść swoje linki</string>
+    <string name="home_subtitle">Wklej link lub całą wiadomość i usuń z niej elementy śledzące jednym dotknięciem.</string>
+    <string name="home_input_label">Tekst z linkami</string>
+    <string name="home_input_placeholder">Wklej URL lub tekst</string>
+    <string name="home_output_label">Oczyszczony tekst</string>
+    <string name="home_output_placeholder">Tutaj pojawi się oczyszczony tekst</string>
+    <string name="home_wash_action">Oczyść</string>
+    <string name="home_clean_copy_action">Oczyść i kopiuj</string>
+    <string name="home_washing_action">Oczyszczanie…</string>
+    <string name="home_wash_error">Nie udało się oczyścić tekstu.</string>
+    <string name="home_copy_error">Tekst został oczyszczony, ale nie udało się go skopiować.</string>
+    <string name="home_copied_message">Skopiowano oczyszczony tekst do schowka</string>
     <string name="settings_section_general">Ogólne</string>
     <string name="settings_section_redirects">Przekierowania</string>
     <string name="settings_section_custom_domains">Własne domeny</string>
     <string name="settings_clipboard_debloater">Debloatuj schowek</string>
-    <string name="settings_use_clear_urls">Używaj bazy Clear URLs</string>
+    <string name="settings_use_clear_urls">Używaj bazy ClearURLs</string>
     <string name="settings_redirect_wash_policy">Polityka przekierowań</string>
     <string name="settings_policy_ignore">Ignoruj przekierowania</string>
     <string name="settings_policy_locally">Przetwarzaj lokalnie</string>
