@@ -60,6 +60,7 @@ private val homeSnackbarPadding = 16.dp
 private val homeErrorPadding = 12.dp
 private const val homeTextFieldMinLines = 4
 private const val homeTextFieldMaxLines = 8
+private const val clipboardTextMimeType = "text/*"
 
 private enum class HomeAction {
     CLEAN,
@@ -101,7 +102,10 @@ fun HomeScreen(
                     HomeAction.CLEAN_CLIPBOARD -> {
                         val clipText = clipboard.getClipEntry()
                             ?.clipData
-                            ?.takeIf { it.itemCount > 0 }
+                            ?.takeIf {
+                                it.description.hasMimeType(clipboardTextMimeType) &&
+                                    it.itemCount > 0
+                            }
                             ?.getItemAt(0)
                             ?.coerceToText(context)
                             ?.toString()
