@@ -1,0 +1,105 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            formats: deb,appimage
+            artifact: linux
+          - os: windows-latest
+            formats: nsis
+            artifact: windows
+          - os: macos-14
+            formats: app,dmg
+            artifact: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev patchelf file pkg-config libssl-dev dpkg-dev librsvg2-dev libgirepository1.0-dev
+
+      - name: Install cargo-packager
+        run: cargo install cargo-packager --locked --version 0.11.8
+
+      - name: Package
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
+        run: cargo packager -p urldebloater-desktop-daemon --release --formats ${{ matrix.formats }}
+
+      - name: Verify macOS ad-hoc signatures
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          app="dist/UrlDebloater.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          unpacked=$(mktemp -d)
+          tar -xzf dist/UrlDebloater.app.tar.gz -C "$unpacked"
+          codesign --verify --deep --strict --verbose=2 "$unpacked/UrlDebloater.app"
+
+          dmgs=(dist/*.dmg)
+          test "${#dmgs[@]}" -eq 1
+          mountpoint=$(mktemp -d)
+          trap 'hdiutil detach "$mountpoint" -quiet' EXIT
+          hdiutil attach "${dmgs[0]}" -nobrowse -readonly -mountpoint "$mountpoint"
+          codesign --verify --deep --strict --verbose=2 "$mountpoint/UrlDebloater.app"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: urldebloater-${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: package
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Verify Cargo version matches tag
+        shell: bash
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("crates/desktop-daemon/Cargo.toml", "rb"))["package"]["version"])')
+          test "$version" = "${GITHUB_REF_NAME#v}"
+
+      - name: Generate update manifest
+        shell: bash
+        run: |
+          python3 scripts/generate-latest-json.py \
+            dist "$GITHUB_REF_NAME" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+          files: |
+            dist/latest.json
+            dist/*.exe
+            dist/*.deb
+            dist/*.AppImage
+            dist/*.app.tar.gz
+            dist/*.dmg

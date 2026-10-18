@@ -1,0 +1,50 @@
+{
+  "extensionName": {
+    "message": "UrlDebloater"
+  },
+  "extensionDescription": {
+    "message": "Usuwa parametry śledzące i rozwija obsługiwane skrócone linki podczas nawigacji."
+  },
+  "optionsTitle": {
+    "message": "Ustawienia UrlDebloater"
+  },
+  "enabledLabel": {
+    "message": "Czyść adresy URL podczas nawigacji"
+  },
+  "redirectPolicyLegend": {
+    "message": "Rozwiązywanie skróconych linków"
+  },
+  "policyOffLabel": {
+    "message": "Wyłączone"
+  },
+  "policyLocalLabel": {
+    "message": "Lokalnie w przeglądarce"
+  },
+  "policyLocalDescription": {
+    "message": "Przeglądarka rozwija skrócone linki bezpośrednio. Jest to szybsze i niezależne od miksera, ale usługa skracania linków widzi Twój adres IP. Pliki cookie nie są wysyłane."
+  },
+  "policyMixerLabel": {
+    "message": "Przez mikser"
+  },
+  "policyMixerDescription": {
+    "message": "Skrócone linki rozwija poniższa instancja miksera; widzi ona odwiedzane przez Ciebie linki."
+  },
+  "mixerUrlLabel": {
+    "message": "Adres URL miksera"
+  },
+  "mixerUrlInvalid": {
+    "message": "Wprowadź prawidłowy adres URL miksera zaczynający się od http:// lub https://."
+  },
+  "settingsSaved": {
+    "message": "Zapisano ustawienia."
+  },
+  "waitTitle": {
+    "message": "Rozwiązywanie linku"
+  },
+  "waitMessage": {
+    "message": "Oryginalne żądanie zostało zatrzymane. Przekierowanie nastąpi po oczyszczeniu linku."
+  },
+  "waitFailed": {
+    "message": "Nie udało się rozwiązać linku. Oryginalny adres URL nie został otwarty."
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "extensionName": {
+    "message": "UrlDebloater"
+  },
+  "extensionDescription": {
+    "message": "Remove tracking parameters and resolve supported short links during navigation."
+  },
+  "optionsTitle": {
+    "message": "UrlDebloater settings"
+  },
+  "enabledLabel": {
+    "message": "Clean URLs during navigation"
+  },
+  "redirectPolicyLegend": {
+    "message": "Short-link resolution"
+  },
+  "policyOffLabel": {
+    "message": "Off"
+  },
+  "policyLocalLabel": {
+    "message": "Local in browser"
+  },
+  "policyLocalDescription": {
+    "message": "Browser resolves short links directly. Faster and independent of the mixer, but the shortener sees your IP address. No cookies are sent."
+  },
+  "policyMixerLabel": {
+    "message": "Mixer"
+  },
+  "policyMixerDescription": {
+    "message": "Short links are resolved by the mixer instance below; it sees the links you visit."
+  },
+  "mixerUrlLabel": {
+    "message": "Mixer URL"
+  },
+  "mixerUrlInvalid": {
+    "message": "Enter a valid mixer URL using http:// or https://."
+  },
+  "settingsSaved": {
+    "message": "Settings saved."
+  },
+  "waitTitle": {
+    "message": "Resolving link"
+  },
+  "waitMessage": {
+    "message": "The original request was stopped. You will be redirected after the link is cleaned."
+  },
+  "waitFailed": {
+    "message": "The link could not be resolved. The original URL was not opened."
+  }
+}

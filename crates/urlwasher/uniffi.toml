@@ -1,0 +1,4 @@
+[bindings.kotlin]
+package_name = "cc.makin.urldebloater.android.rust"
+android = true
+generate_immutable_records = true

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=UrlDebloater Configuration
+Comment=Choose how UrlDebloater washes links
+Exec=urldebloater-desktop-config-gui
+Icon=com.urldebloater.config
+Terminal=false
+NoDisplay=true
+StartupNotify=false
+Categories=Utility;

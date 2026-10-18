@@ -2,3 +2,10 @@
 target/
 config.json
 result
+.direnv
+web/public/
+web/static/wasm/
+extensions/browser/wasm/
+extensions/browser/dist/
+dist/
+__pycache__/

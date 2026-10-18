@@ -3,12 +3,13 @@
   pkgs,
   src,
   cargoLock,
+  rustPlatform,
 }:
 
 let
   serviceName = "urldebloater-mixer";
 
-  package = pkgs.rustPlatform.buildRustPackage {
+  package = rustPlatform.buildRustPackage {
     pname = "urldebloater-mixer";
     version = "0.1.2";
     inherit src cargoLock;
@@ -57,7 +58,7 @@ let
             Group = serviceName;
           };
           environment = {
-            LISTEN_ADDRESS = builtins.toString config.services.${serviceName}.listenAddress;
+            LISTEN_ADDRESS = toString config.services.${serviceName}.listenAddress;
           };
         };
 

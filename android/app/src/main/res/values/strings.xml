@@ -1,0 +1,48 @@
+<resources>
+    <string name="app_name" translatable="false">UrlDebloater</string>
+    <string name="navbar_home">Home</string>
+    <string name="navbar_settings">Settings</string>
+    <string name="home_title">Clean your links</string>
+    <string name="home_subtitle">Paste a link or a whole message and remove its trackers in one tap.</string>
+    <string name="home_input_label">Text with links</string>
+    <string name="home_input_placeholder">Paste a URL or text here</string>
+    <string name="home_wash_action">Clean</string>
+    <string name="home_clean_clipboard_action">Clean clipboard</string>
+    <string name="home_washing_action">Cleaning…</string>
+    <string name="home_wash_error">Unable to clean the text.</string>
+    <string name="home_clipboard_error">Unable to clean the clipboard.</string>
+    <string name="home_clipboard_empty_error">Clipboard does not contain text.</string>
+    <string name="home_wash_empty_error">Nothing to clean.</string>
+    <string name="text_cleaned_message">Cleaned</string>
+    <string name="text_debloat_action" translatable="false">debloat</string>
+    <string name="home_clean_open_action">Clean &amp; open</string>
+    <string name="home_link_chooser_title">Which link to open?</string>
+    <string name="home_link_not_found">Clipboard has no link</string>
+    <string name="home_link_open_error">No app can open this link</string>
+    <string name="settings_add_open_shortcut_summary">Cleans the clipboard and opens its link</string>
+    <string name="home_clipboard_cleaned_message">Clipboard cleaned</string>
+    <string name="settings_section_general">General</string>
+    <string name="settings_section_redirects">Redirects</string>
+    <string name="settings_section_custom_domains">Custom domains</string>
+    <string name="settings_use_clear_urls">Use ClearURLs database</string>
+    <string name="settings_add_shortcut">Add “%1$s” shortcut</string>
+    <string name="settings_add_shortcut_summary">Cleans the clipboard in one tap</string>
+    <string name="settings_add_shortcut_unsupported">Not supported by your launcher</string>
+    <string name="settings_redirect_wash_policy">Redirect wash policy</string>
+    <string name="settings_policy_ignore">Ignore redirects</string>
+    <string name="settings_policy_locally">Resolve redirects locally</string>
+    <string name="settings_policy_via_mixer">Resolve via mixer</string>
+    <string name="settings_policy_via_mixer_privacy_notice">The “Resolve via mixer” option sends links from supported services to the configured mixer. The owner of that instance can see those links.</string>
+    <string name="settings_mixer_url">Mixer URL</string>
+    <string name="settings_mixer_url_invalid">Enter a valid URL, like https://example.com</string>
+    <string name="settings_mixer_url_default">Default</string>
+    <string name="settings_twitter_domain">Twitter domain</string>
+    <string name="settings_twitter_original" translatable="false">x.com</string>
+    <string name="settings_twitter_vx" translatable="false">VxTwitter.com</string>
+    <string name="settings_twitter_fx" translatable="false">FxTwitter.com</string>
+    <string name="settings_reset_defaults">Reset to defaults</string>
+    <string name="settings_reset_confirmation">This will restore all settings to their default values.</string>
+    <string name="settings_reset_confirm">Reset</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_cancel">Cancel</string>
+</resources>

@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name=".UrlDebloaterApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.UrlDebloater">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.UrlDebloater">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ClipboardWashActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.UrlDebloater.Transparent" />
+
+        <activity
+            android:name=".ClipboardOpenActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.UrlDebloater.Transparent" />
+
+        <activity
+            android:name=".TextWashActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.UrlDebloater.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".ProcessTextAlias"
+            android:exported="true"
+            android:label="@string/text_debloat_action"
+            android:targetActivity=".TextWashActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".ClipboardWashTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_content_cut"
+            android:label="@string/home_clean_clipboard_action"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".ClipboardOpenTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_open_in_new"
+            android:label="@string/home_clean_open_action"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

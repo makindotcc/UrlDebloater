@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f4f0e6" />
+    <meta
+      name="mixer-url"
+      content="{{ get_env(name='MIXER_URL', default='http://127.0.0.1:7777/') }}"
+    />
+    <meta
+      name="description"
+      content="Paste a link or message. UrlDebloater removes tracking codes and shows where shortened links really go so you can share clean text."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="UrlDebloater - Remove tracking from links"
+    />
+    <meta
+      property="og:description"
+      content="Remove the tracking codes sites add to links, then copy the cleaned text."
+    />
+    <title>UrlDebloater - Remove tracking from links</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+
+  <body id="top">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="UrlDebloater home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>UrlDebloater</span>
+      </a>
+      <nav class="primary-nav" aria-label="Primary">
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#how-it-works">How it works</a>
+        <a class="nav-link" href="#screenshots">Screenshots</a>
+      </nav>
+      <a
+        class="github-link"
+        href="https://github.com/makindotcc/UrlDebloater"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <span>GitHub</span>
+        <span class="external-arrow" aria-hidden="true">↗</span>
+      </a>
+    </header>
+    <main id="main" class="page-shell">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">Remove tracking from links.</h1>
+          <p class="lede">
+            Paste a link or a whole message. Tracking codes are removed and
+            shortened links are opened.
+          </p>
+        </div>
+        <form
+          id="cleaner-form"
+          class="cleaner"
+          data-busy="false"
+          aria-label="Link cleaner"
+          novalidate="novalidate"
+        >
+          <label class="cleaner-label" for="wash-input">Text with links</label>
+          <textarea
+            id="wash-input"
+            name="text"
+            rows="8"
+            placeholder="Paste a link or message here"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-describedby="clean-status"
+            disabled
+          ></textarea>
+          <div class="cleaner-footer">
+            <label class="cleaner-toggle" for="unroll-short-links">
+              <input
+                id="unroll-short-links"
+                type="checkbox"
+                autocomplete="off"
+              />
+              <span class="toggle-track" aria-hidden="true"></span>
+              <span class="toggle-copy">
+                <strong>Unroll short links</strong>
+                <span>
+                  Only shortened links like vm.tiktok.com or on.soundcloud.com
+                  links are resolved on the server.
+                </span>
+                <span>If disabled nothing is sent to the server.</span>
+              </span>
+            </label>
+            <button
+              id="clean-button"
+              class="button button-primary"
+              type="submit"
+              disabled
+            >
+              <span class="button-spinner" aria-hidden="true"></span>
+              <span class="button-label">Clean &amp; copy</span>
+            </button>
+          </div>
+          <p
+            id="clean-status"
+            class="clean-status"
+            role="status"
+            aria-live="polite"
+            data-tone="neutral"
+          ></p>
+        </form>
+      </section>
+      <section
+        class="platform-strip"
+        aria-label="Cleans links from popular platforms"
+      >
+        <p>Cleans links from</p>
+        <ul>
+          <li>YouTube</li>
+          <li>YouTube Music</li>
+          <li>X / Twitter</li>
+          <li>TikTok</li>
+          <li>SoundCloud</li>
+          <li>Spotify</li>
+          <li class="platform-more">And more...</li>
+        </ul>
+      </section>
+      <section id="features" class="section" aria-labelledby="features-title">
+        <header class="section-heading">
+          <div>
+            <h2 id="features-title">Features</h2>
+          </div>
+        </header>
+        <div class="feature-grid">
+          <article class="feature feature-url">
+            <h3>Strips tracking codes</h3>
+            <p>
+              Removes the tracking codes sites add to links. Links with nothing
+              to remove stay unchanged.
+            </p>
+            <div
+              class="url-demo"
+              aria-label="Example of a link before and after cleaning"
+            >
+              <div class="url-row dirty">
+                <span>Before</span>
+                <code>https://youtu.be/lSwnPoo9ZK0?si=ETK0gAaXYGNy2aJ6</code>
+              </div>
+              <div class="url-row clean">
+                <span>After</span>
+                <code>https://youtu.be/lSwnPoo9ZK0</code>
+              </div>
+            </div>
+          </article>
+          <article class="feature feature-message">
+            <h3>Cleans whole messages</h3>
+            <p>
+              Finds every link in a message, cleans them, and leaves the rest of
+              the text alone.
+            </p>
+            <p class="message-demo">
+              <span>sending this later:</span>
+              <mark>https://youtu.be/lSwnPoo9ZK0?si=ETK0...</mark>
+            </p>
+          </article>
+          <article class="feature feature-short">
+            <h3>Shortened links</h3>
+            <p>
+              TikTok and SoundCloud short links are recognised automatically. On
+              the website, only those links are opened by the hosted server; the
+              rest of your message stays in your browser.
+            </p>
+            <div class="code-stack" aria-hidden="true">
+              <code>vm.tiktok.com/...</code>
+              <span>→</span>
+              <code>tiktok.com/@user/video/...</code>
+            </div>
+          </article>
+          <article class="feature feature-engine">
+            <h3>In the apps</h3>
+            <p>Choose how short links are opened:</p>
+            <ul class="option-list">
+              <li>
+                <strong>Local</strong>
+                <span>Open links from your own connection.</span>
+              </li>
+              <li>
+                <strong>Hosted server</strong>
+                <span>Open links through the project server.</span>
+              </li>
+              <li>
+                <strong>HTTP / SOCKS5 proxy</strong>
+                <span>Route short-link checks through a proxy</span>
+              </li>
+            </ul>
+            <p class="feature-note">
+              You can also run your own server for unrolling short links.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section
+        id="how-it-works"
+        class="section how-section"
+        aria-labelledby="how-title"
+      >
+        <header class="section-heading">
+          <div>
+            <h2 id="how-title">How it works</h2>
+          </div>
+        </header>
+        <div class="platform-guide">
+          <article class="guide-card">
+            <header class="guide-header">
+              <span class="guide-platform">DESKTOP</span>
+              <h3>Runs in the background</h3>
+            </header>
+            <p class="guide-intro">
+              Automatic cleaning, a tray menu, and settings in one background
+              app.
+            </p>
+            <dl class="guide-list">
+              <div>
+                <dt>Automatic cleaning</dt>
+                <dd>
+                  Links are cleaned as soon as you copy them. Nothing needs to
+                  be pasted.
+                </dd>
+              </div>
+              <div>
+                <dt>Tray icon</dt>
+                <dd>
+                  Clean the clipboard now, pause automatic cleaning, or open
+                  settings.
+                </dd>
+              </div>
+              <div>
+                <dt>Settings</dt>
+                <dd>Choose how shortened links are opened.</dd>
+              </div>
+            </dl>
+          </article>
+          <article class="guide-card">
+            <header class="guide-header">
+              <span class="guide-platform">ANDROID</span>
+              <h3>Clean without opening the app</h3>
+            </header>
+            <p class="guide-intro">
+              Use the same cleaner from shortcuts on your phone.
+            </p>
+            <dl class="guide-list">
+              <div>
+                <dt>Quick Settings tile</dt>
+                <dd>Clean the clipboard from the Quick Settings panel.</dd>
+              </div>
+              <div>
+                <dt>Home screen shortcut</dt>
+                <dd>Add a shortcut that cleans the clipboard with one tap.</dd>
+              </div>
+              <div>
+                <dt>Context menu</dt>
+                <dd>
+                  Send selected text or a link to UrlDebloater from another app.
+                </dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+      </section>
+      <section
+        id="screenshots"
+        class="section"
+        aria-labelledby="screenshots-title"
+      >
+        <header class="section-heading">
+          <div>
+            <h2 id="screenshots-title">Screenshots</h2>
+          </div>
+        </header>
+        <div class="screenshot-grid">
+          <figure class="shot-card" id="android-quicktile-screenshot">
+            <div class="shot-stage">
+              <img
+                class="shot-image shot-image-phone"
+                src="screenshots/android_quicktile.png"
+                alt="Android Quick Settings panel with the UrlDebloater clipboard cleaning tile"
+                width="1079"
+                height="1660"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <figcaption>
+              <div>
+                <strong>Android Quick Settings</strong>
+                <span>Clean the clipboard from the tile.</span>
+              </div>
+            </figcaption>
+          </figure>
+          <figure class="shot-card" id="android-settings-screenshot">
+            <div class="shot-stage">
+              <img
+                class="shot-image shot-image-phone"
+                src="screenshots/android_settings.png"
+                alt="UrlDebloater settings screen on Android"
+                width="1080"
+                height="2364"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <figcaption>
+              <div>
+                <strong>Android settings</strong>
+                <span>Choose how shortened links are opened.</span>
+              </div>
+            </figcaption>
+          </figure>
+          <figure class="shot-card" id="linux-screenshot">
+            <div class="shot-stage">
+              <img
+                class="shot-image shot-image-desktop"
+                src="screenshots/linux.png"
+                alt="UrlDebloater desktop app running on Linux"
+                width="693"
+                height="538"
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
+            <figcaption>
+              <div>
+                <strong>Linux desktop</strong>
+                <span>Automatic cleaning and tray controls.</span>
+              </div>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <section class="cta" aria-labelledby="cta-title">
+        <div class="cta-copy">
+          <h2 id="cta-title">Free Open Source Software</h2>
+        </div>
+        <div class="cta-actions">
+          <a
+            class="button button-dark"
+            href="https://github.com/makindotcc/UrlDebloater"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open GitHub
+            <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer page-shell">
+      <div class="footer-main">
+        <a class="brand" href="#top" aria-label="UrlDebloater home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span>UrlDebloater</span>
+        </a>
+        <p>Remove tracking from links.</p>
+        <nav class="footer-links" aria-label="Footer">
+          <a
+            href="https://github.com/makindotcc/UrlDebloater"
+            target="_blank"
+            rel="noreferrer"
+          >
+            GitHub
+          </a>
+          <a href="#features">Features</a>
+          <a href="#screenshots">Screenshots</a>
+        </nav>
+      </div>
+    </footer>
+    <noscript>
+      <p class="noscript-note">
+        Enable scripts in your browser to use the in-page cleaner. The desktop
+        and Android apps do not need them.
+      </p>
+    </noscript>
+  </body>
+</html>
