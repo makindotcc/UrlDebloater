@@ -1,5 +1,6 @@
 use crate::{clipboard::ClipboardService, config_integration, tray};
 use anyhow::Context;
+use anyhow::anyhow;
 use arboard::Clipboard;
 use log::{error, info};
 use std::{
