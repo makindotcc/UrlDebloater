@@ -8,4 +8,7 @@ web/static/wasm/
 extensions/browser/wasm/
 extensions/browser/dist/
 dist/
+*.jks
+*.jks.b64
+*.keystore
 __pycache__/

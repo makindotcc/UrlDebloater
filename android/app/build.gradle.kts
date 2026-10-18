@@ -59,6 +59,21 @@ val uniffiOutputDir = layout.buildDirectory.dir("generated/uniffi")
 val debugJniLibsDir = layout.buildDirectory.dir("generated/cargo-ndk/debug/jniLibs")
 val releaseJniLibsDir = layout.buildDirectory.dir("generated/cargo-ndk/release/jniLibs")
 
+val androidVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
+    .map { it.toInt() }
+    .getOrElse(1)
+val androidVersionName = providers.environmentVariable("ANDROID_VERSION_NAME").getOrElse("1.0")
+val androidKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
+val androidKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
+val androidKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS")
+val androidKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD")
+val hasAndroidReleaseSigning = listOf(
+    androidKeystorePath,
+    androidKeystorePassword,
+    androidKeyAlias,
+    androidKeyPassword,
+).all { it.isPresent }
+
 android {
     namespace = "cc.makin.urldebloater.android"
     compileSdk {
@@ -71,8 +86,8 @@ android {
         applicationId = "cc.makin.urldebloater.android"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = androidVersionCode
+        versionName = androidVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -81,8 +96,20 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasAndroidReleaseSigning) {
+            register("release") {
+                storeFile = file(androidKeystorePath.get())
+                storePassword = androidKeystorePassword.get()
+                keyAlias = androidKeyAlias.get()
+                keyPassword = androidKeyPassword.get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
