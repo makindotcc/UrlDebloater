@@ -15,8 +15,10 @@
     <string name="settings_section_general">Ogólne</string>
     <string name="settings_section_redirects">Przekierowania</string>
     <string name="settings_section_custom_domains">Własne domeny</string>
-    <string name="settings_clipboard_debloater">Debloatuj schowek</string>
     <string name="settings_use_clear_urls">Używaj bazy ClearURLs</string>
+    <string name="settings_add_shortcut">Dodaj skrót na ekran główny</string>
+    <string name="settings_add_shortcut_summary">Czyści schowek jednym dotknięciem</string>
+    <string name="settings_add_shortcut_unsupported">Niewspierane przez Twój launcher</string>
     <string name="settings_redirect_wash_policy">Polityka przekierowań</string>
     <string name="settings_policy_ignore">Ignoruj przekierowania</string>
     <string name="settings_policy_locally">Przetwarzaj lokalnie</string>

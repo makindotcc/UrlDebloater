@@ -1,0 +1,8 @@
+base_url = "https://makindotcc.github.io/UrlDebloater/"
+title = "UrlDebloater"
+description = "Remove tracking codes from links before you share them."
+compile_sass = false
+minify_html = false
+generate_feeds = false
+build_search_index = false
+ignored_static = ["wasm/.gitignore", "wasm/package.json"]

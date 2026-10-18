@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 url.workspace = true
-reqwest.workspace = true
+reqwest = { workspace = true, optional = true }
 anyhow.workspace = true
 log.workspace = true
 lru.workspace = true
@@ -18,7 +18,9 @@ uniffi = { version = "0.32.2", optional = true, features = ["tokio"] }
 thiserror = { version = "2", optional = true }
 
 [features]
-cleanurls-cache = ["dep:tokio"]
+default = ["native"]
+native = ["dep:reqwest"]
+cleanurls-cache = ["native", "dep:tokio"]
 uniffi = ["dep:uniffi", "dep:thiserror", "cleanurls-cache"]
 
 [dev-dependencies]

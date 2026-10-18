@@ -6,7 +6,6 @@ import kotlin.enums.enumEntries
 import androidx.core.content.edit
 
 internal object SettingsCodec {
-    const val CLIPBOARD_DEBLOATER = "clipboard_debloater"
     const val REDIRECT_WASH_POLICY = "redirect_wash_policy"
     const val MIXER_URL = "mixer_url"
     const val USE_CLEAR_URLS = "use_clear_urls"
@@ -15,8 +14,6 @@ internal object SettingsCodec {
     fun decode(values: Map<String, Any?>): AppSettings {
         val defaults = AppSettings()
         return AppSettings(
-            clipboardDebloater = values[CLIPBOARD_DEBLOATER] as? Boolean
-                ?: defaults.clipboardDebloater,
             redirectWashPolicy = enumValue(
                 values[REDIRECT_WASH_POLICY],
                 defaults.redirectWashPolicy
@@ -29,7 +26,6 @@ internal object SettingsCodec {
     }
 
     fun encode(settings: AppSettings): Map<String, Any> = mapOf(
-        CLIPBOARD_DEBLOATER to settings.clipboardDebloater,
         REDIRECT_WASH_POLICY to settings.redirectWashPolicy.name,
         MIXER_URL to settings.mixerUrl,
         USE_CLEAR_URLS to settings.useClearUrls,

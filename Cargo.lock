@@ -4799,6 +4799,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "urldebloater-urlwasher-wasm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures-channel",
+ "serde_json",
+ "url",
+ "urldebloater-urlwasher",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

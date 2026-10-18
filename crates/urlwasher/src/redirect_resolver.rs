@@ -1,6 +1,10 @@
+#[cfg(feature = "native")]
 use anyhow::{anyhow, Context};
+#[cfg(feature = "native")]
 use reqwest::header;
-use std::{future::Future, time::Duration};
+use std::future::Future;
+#[cfg(feature = "native")]
+use std::time::Duration;
 use url::Url;
 
 pub trait RedirectResolver: Send + Sync {
@@ -9,7 +13,9 @@ pub trait RedirectResolver: Send + Sync {
 
 pub enum DefaultRedirectResolver {
     None,
+    #[cfg(feature = "native")]
     WithMixer(WithMixerRedirectResolver),
+    #[cfg(feature = "native")]
     WithoutMixer(WithoutMixerRedirectResolver),
 }
 
@@ -18,17 +24,21 @@ impl RedirectResolver for DefaultRedirectResolver {
         async move {
             match self {
                 Self::None => Ok(url),
+                #[cfg(feature = "native")]
                 Self::WithMixer(resolver) => resolver.resolve(url).await,
+                #[cfg(feature = "native")]
                 Self::WithoutMixer(resolver) => resolver.resolve(url).await,
             }
         }
     }
 }
 
+#[cfg(feature = "native")]
 pub struct WithoutMixerRedirectResolver {
     client: reqwest::Client,
 }
 
+#[cfg(feature = "native")]
 impl Default for WithoutMixerRedirectResolver {
     fn default() -> Self {
         Self {
@@ -46,6 +56,7 @@ impl Default for WithoutMixerRedirectResolver {
     }
 }
 
+#[cfg(feature = "native")]
 impl RedirectResolver for WithoutMixerRedirectResolver {
     fn resolve(&self, url: Url) -> impl Future<Output = anyhow::Result<Url>> + Send {
         async move {
@@ -66,17 +77,20 @@ impl RedirectResolver for WithoutMixerRedirectResolver {
     }
 }
 
+#[cfg(feature = "native")]
 impl From<WithoutMixerRedirectResolver> for DefaultRedirectResolver {
     fn from(resolver: WithoutMixerRedirectResolver) -> Self {
         Self::WithoutMixer(resolver)
     }
 }
 
+#[cfg(feature = "native")]
 pub struct WithMixerRedirectResolver {
     client: reqwest::Client,
     mixer_instance: Url,
 }
 
+#[cfg(feature = "native")]
 impl WithMixerRedirectResolver {
     pub fn new(mixer_instance: Url) -> Self {
         Self {
@@ -91,6 +105,7 @@ impl WithMixerRedirectResolver {
     }
 }
 
+#[cfg(feature = "native")]
 impl RedirectResolver for WithMixerRedirectResolver {
     fn resolve(&self, url: Url) -> impl Future<Output = anyhow::Result<Url>> + Send {
         async move {
@@ -112,6 +127,7 @@ impl RedirectResolver for WithMixerRedirectResolver {
     }
 }
 
+#[cfg(feature = "native")]
 impl From<WithMixerRedirectResolver> for DefaultRedirectResolver {
     fn from(resolver: WithMixerRedirectResolver) -> Self {
         Self::WithMixer(resolver)

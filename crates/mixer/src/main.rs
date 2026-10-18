@@ -1,9 +1,13 @@
 mod error;
 
 use anyhow::Context;
-use axum::extract::{Query, State};
+use axum::extract::{Query, Request, State};
 use axum::{
-    error_handling::HandleErrorLayer, http::StatusCode, response::IntoResponse, routing::get,
+    error_handling::HandleErrorLayer,
+    http::{header, HeaderValue, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::get,
     BoxError, Router,
 };
 use axum_macros::debug_handler;
@@ -110,11 +114,21 @@ async fn run_cleanurls_updater(url_washer: UrlWasherState) {
     }
 }
 
+async fn allow_cors(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    response
+}
+
 fn app(state: AppState, rate_limit: bool) -> Router {
     Router::new()
         .route("/wash", get(wash))
         .layer(
             ServiceBuilder::new()
+                .layer(middleware::from_fn(allow_cors))
                 .layer(TraceLayer::new_for_http())
                 .layer(HandleErrorLayer::new(handle_service_err))
                 .timeout(Duration::from_secs(10))
@@ -171,7 +185,10 @@ async fn handle_service_err(err: BoxError) -> impl IntoResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, http::Request};
+    use axum::{
+        body::Body,
+        http::{header, Request},
+    };
     use http_body_util::BodyExt;
     use tower::ServiceExt;
     use urldebloater_urlwasher::redirect_resolver::DefaultRedirectResolver;
@@ -196,6 +213,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/wash?url=https://youtube.com/watch?v=d2348942389234%26t=123%26si=fdgfsdfg")
+                    .header(header::ORIGIN, "https://example.com")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -203,6 +221,13 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .unwrap(),
+            "*"
+        );
 
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body = String::from_utf8_lossy(&body);

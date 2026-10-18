@@ -111,14 +111,8 @@ pub(crate) mod platform {
                 }
                 .into(),
                 StandardItem {
-                    label: "Settings...".into(),
+                    label: "Settings".into(),
                     activate: Box::new(|tray: &mut Self| tray.send(AppCommand::OpenConfigGui)),
-                    ..Default::default()
-                }
-                .into(),
-                StandardItem {
-                    label: "Reload config".into(),
-                    activate: Box::new(|tray: &mut Self| tray.send(AppCommand::ReloadConfig)),
                     ..Default::default()
                 }
                 .into(),
@@ -279,8 +273,6 @@ pub(crate) mod platform {
                 try_send_command(&command_tx, AppCommand::ToggleClipboardDebloater);
             } else if menu_item_ids.settings == id {
                 try_send_command(&command_tx, AppCommand::OpenConfigGui);
-            } else if menu_item_ids.reload_config == id {
-                try_send_command(&command_tx, AppCommand::ReloadConfig);
             } else if menu_item_ids.exit == id {
                 try_send_command(&command_tx, AppCommand::Exit);
             } else {
@@ -406,8 +398,7 @@ pub(crate) mod platform {
             Self {
                 debloat_clipboard: MenuItem::new("Debloat clipboard", true, None),
                 pause_clipboard_debloat: MenuItem::new(&pause_clipboard_title(None), true, None),
-                settings: MenuItem::new("Settings...", true, None),
-                reload_config: MenuItem::new("Reload config", true, None),
+                settings: MenuItem::new("Settings", true, None),
                 exit: MenuItem::new("Exit", true, None),
             }
         }
@@ -437,7 +428,6 @@ pub(crate) mod platform {
                 debloat_clipboard: self.debloat_clipboard.id().0.clone(),
                 pause_clipboard_debloat: self.pause_clipboard_debloat.id().0.clone(),
                 settings: self.settings.id().0.clone(),
-                reload_config: self.reload_config.id().0.clone(),
                 exit: self.exit.id().0.clone(),
             }
         }
@@ -447,7 +437,6 @@ pub(crate) mod platform {
         debloat_clipboard: String,
         pause_clipboard_debloat: String,
         settings: String,
-        reload_config: String,
         exit: String,
     }
 
@@ -458,8 +447,6 @@ pub(crate) mod platform {
             .context("build clipboard tray items")?;
         menu.append(&menu_items.settings)
             .context("build tray item 'Settings'")?;
-        menu.append(&menu_items.reload_config)
-            .context("build tray item 'Reload config'")?;
         menu.append(&menu_items.exit)
             .context("build tray item 'Exit'")?;
         Ok(menu)

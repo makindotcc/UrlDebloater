@@ -9,7 +9,6 @@ import java.net.URI
 const val PUBLIC_MIXER_INSTANCE = "https://urldebloater.makin.cc/"
 
 data class AppSettings(
-    val clipboardDebloater: Boolean = true,
     val redirectWashPolicy: RedirectWashPolicyDiscriminants = RedirectWashPolicyDiscriminants.LOCALLY,
     val mixerUrl: String = PUBLIC_MIXER_INSTANCE,
     val useClearUrls: Boolean = true,

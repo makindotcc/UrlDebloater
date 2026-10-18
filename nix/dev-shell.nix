@@ -36,6 +36,7 @@ pkgs.mkShell {
     pkgs.rust-analyzer
     pkgs.rustc
     pkgs.rustPlatform.rustLibSrc
+    pkgs.zola
   ] ++ lib.optionals isLinux [ pkgs.wild ];
 
   buildInputs = lib.optionals isLinux linuxGuiLibraries ++ lib.optionals (!isLinux) [ pkgs.apple-sdk_26 ];

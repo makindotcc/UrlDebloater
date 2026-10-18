@@ -16,8 +16,10 @@
     <string name="settings_section_general">General</string>
     <string name="settings_section_redirects">Redirects</string>
     <string name="settings_section_custom_domains">Custom domains</string>
-    <string name="settings_clipboard_debloater">Debloat clipboard</string>
     <string name="settings_use_clear_urls">Use ClearURLs database</string>
+    <string name="settings_add_shortcut">Add home screen shortcut</string>
+    <string name="settings_add_shortcut_summary">Cleans the clipboard in one tap</string>
+    <string name="settings_add_shortcut_unsupported">Not supported by your launcher</string>
     <string name="settings_redirect_wash_policy">Redirect wash policy</string>
     <string name="settings_policy_ignore">Ignore redirects</string>
     <string name="settings_policy_locally">Resolve redirects locally</string>

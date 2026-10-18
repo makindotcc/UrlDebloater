@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -61,6 +62,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import cc.makin.urldebloater.android.R
+import cc.makin.urldebloater.android.isClipboardShortcutSupported
+import cc.makin.urldebloater.android.requestClipboardShortcut
 import cc.makin.urldebloater.android.rust.RedirectWashPolicyDiscriminants
 import cc.makin.urldebloater.android.rust.TwitterPolicy
 import cc.makin.urldebloater.android.ui.theme.UrlDebloaterTheme
@@ -89,6 +92,8 @@ fun SettingsScreen(
 ) {
     var settings by remember { mutableStateOf(initialSettings) }
     var openDialog by rememberSaveable { mutableStateOf<SettingsDialog?>(null) }
+    val context = LocalContext.current
+    val shortcutSupported = remember(context) { isClipboardShortcutSupported(context) }
 
     fun update(transform: (AppSettings) -> AppSettings) {
         val updated = transform(settings)
@@ -116,19 +121,24 @@ fun SettingsScreen(
             )
             SettingsSection(stringResource(R.string.settings_section_general)) {
                 SwitchPreference(
-                    iconRes = R.drawable.ic_content_cut,
-                    title = stringResource(R.string.settings_clipboard_debloater),
-                    checked = settings.clipboardDebloater,
-                    onCheckedChange = { checked ->
-                        update { it.copy(clipboardDebloater = checked) }
-                    },
-                )
-                SettingsDivider()
-                SwitchPreference(
                     iconRes = R.drawable.ic_database,
                     title = stringResource(R.string.settings_use_clear_urls),
                     checked = settings.useClearUrls,
                     onCheckedChange = { checked -> update { it.copy(useClearUrls = checked) } },
+                )
+                SettingsDivider()
+                SettingsPreference(
+                    iconRes = R.drawable.ic_content_cut,
+                    title = stringResource(R.string.settings_add_shortcut),
+                    summary = stringResource(
+                        if (shortcutSupported) {
+                            R.string.settings_add_shortcut_summary
+                        } else {
+                            R.string.settings_add_shortcut_unsupported
+                        }
+                    ),
+                    enabled = shortcutSupported,
+                    onClick = { requestClipboardShortcut(context) },
                 )
             }
             SettingsSection(stringResource(R.string.settings_section_redirects)) {

@@ -15,6 +15,8 @@ Mixer assumes you are running behind proxy where header ``X-Forwarded-For`` cann
 
 Method: GET
 
+Responses set `Access-Control-Allow-Origin: *` so browser clients can call the mixer directly.
+
 #### Response
 
 Success:

@@ -37,7 +37,7 @@ https://github.com/makindotcc/UrlDebloater/assets/9150636/12d83dd8-9c60-4ada-94b
 
 # Configuration
 
-The tray menu's *Settings...* entry opens the configuration window — a separate
+The tray menu's *Settings* entry opens the configuration window — a separate
 process (`urldebloater-desktop-config-gui`, expected next to the application binary), so
 nothing is allocated for it while it is closed. Saving reloads the configuration
 in the running application; no restart is needed.
@@ -68,9 +68,59 @@ Crates live in `crates/`:
 | `urldebloater-desktop-config` | desktop settings model, config path and atomic persistence |
 | `urldebloater-desktop-config-gui` | the settings window (native widgets via winio) |
 | `urldebloater-android` | Android `cdylib`, JNI initialization and UniFFI binding generator |
+| `urldebloater-urlwasher-wasm` | browser build of `TextWasher` with a mixer-backed redirect resolver |
 
-Platforms that will get their own crates later (`urldebloater-ios`, `-web`) are not there
-yet; browser extensions are planned under `extensions/`.
+The iOS crate (`urldebloater-ios`) is not there yet; browser extensions are planned under
+`extensions/`.
+
+# Web landing page
+
+The landing page is a [Zola](https://www.getzola.org/) site in `web/`. It is plain HTML, CSS,
+and JavaScript with no server application. `urldebloater-urlwasher` is compiled to WebAssembly
+and runs `TextWasher` in the browser. ClearURLs rules are embedded in the WASM module.
+Redirects for the supported short-link domains are resolved by sending only those URLs to the
+mixer; the surrounding text and other URLs stay in the browser.
+
+The Nix dev shell includes Zola. Build the WASM package and the site from the repository root:
+
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+wasm-pack build crates/urlwasher-wasm --target web --release \
+  --out-dir ../../web/static/wasm \
+  --out-name urldebloater_urlwasher_wasm --no-typescript
+zola --root web build
+```
+
+Zola writes the site to `web/public`. `MIXER_URL` is inserted into the page at build time;
+when omitted, it defaults to `http://127.0.0.1:7777/`. Override it for production, for example
+`MIXER_URL=https://urldebloater.makin.cc/ zola --root web build`. Deploy `web/public` to any
+static host.
+
+For local development:
+
+```sh
+zola --root web serve
+```
+
+The dev server listens on <http://127.0.0.1:1111> and reloads the page when files change.
+
+Set the production URL when building for Caddy or another domain:
+
+```sh
+MIXER_URL=https://urldebloater.makin.cc/ zola --root web build --base-url https://example.com/
+```
+
+The default `base_url` in `web/zola.toml` is the GitHub Pages project URL. The `mixer` query
+parameter overrides the configured mixer for development, for example
+`http://127.0.0.1:1111/?mixer=http%3A%2F%2F127.0.0.1%3A7777%2F`. The mixer allows cross-origin
+GET requests so the browser can call it directly.
+
+Do not open the generated HTML directly via `file://`; browsers block ES modules and WASM
+loaded from local files.
+
+Screenshots live in `web/static/screenshots/`. The logo is
+`web/static/assets/icon/logo.svg`, copied from `assets/icon/logo.svg`.
 
 # Mobile platforms plans
 
@@ -86,7 +136,7 @@ https://github.com/makindotcc/UrlDebloater/assets/9150636/7e7de474-ffe9-49a2-ac8
 ## Android
 
 The settings screen uses Material 3 Expressive. Resetting settings to their defaults requires confirmation.
-The home screen washes arbitrary text in place through the same Rust implementation as desktop. Its **Clean clipboard** action cleans the current clipboard text directly, without manual pasting or copying.
+The home screen washes arbitrary text in place through the same Rust implementation as desktop. Its **Clean clipboard** action cleans the current clipboard text directly, without manual pasting or copying. The same action is available as a Quick Settings tile and as a pinned home screen shortcut, which is added from the settings screen.
 
 ### Native build
 
@@ -120,4 +170,4 @@ probably possible same features as in desktop app
 
 # Credits
 
-Tray icon provided by [tabler.io](https://tabler.io/icons).
+Tray and app icons provided by [tabler.io](https://tabler.io/icons).

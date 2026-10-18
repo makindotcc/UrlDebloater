@@ -1,6 +1,10 @@
 use anyhow::anyhow;
-use anyhow::{ensure, Context};
-use log::{error, warn};
+#[cfg(feature = "native")]
+use anyhow::ensure;
+use anyhow::Context;
+#[cfg(feature = "cleanurls-cache")]
+use log::error;
+use log::warn;
 use regex::Regex;
 use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
@@ -59,8 +63,10 @@ pub trait CatalogLoader {
     fn load_catalog(&self) -> impl Future<Output = anyhow::Result<DataCatalog>>;
 }
 
+#[cfg(feature = "native")]
 pub struct ReqwestCatalogLoader;
 
+#[cfg(feature = "native")]
 impl CatalogLoader for ReqwestCatalogLoader {
     fn load_catalog(&self) -> impl Future<Output = anyhow::Result<DataCatalog>> {
         async {
@@ -184,6 +190,7 @@ pub struct DataCatalog {
 }
 
 impl DataCatalog {
+    #[cfg(feature = "cleanurls-cache")]
     fn hardcoded() -> Self {
         serde_json::from_str(include_str!(concat!(
             env!("CARGO_WORKSPACE_DIR"),
