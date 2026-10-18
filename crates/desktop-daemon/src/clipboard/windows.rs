@@ -27,7 +27,9 @@ impl ChangeCounter {
             0 => {
                 if !self.warned_unavailable {
                     self.warned_unavailable = true;
-                    warn!("Clipboard sequence number unavailable; reading the clipboard every cycle");
+                    warn!(
+                        "Clipboard sequence number unavailable; reading the clipboard every cycle"
+                    );
                 }
                 return true;
             }
