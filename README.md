@@ -88,11 +88,11 @@ The package accepts `configGui = false` through `.override`, for example
 
 ## NixOS
 
-Import the flake's `nixosModules.desktop` and enable the service:
+Import the flake's `nixosModules.default` (also available as `nixosModules.desktop`) and enable the service:
 
 ```nix
 {
-  imports = [ inputs.urldebloater.nixosModules.desktop ];
+  imports = [ inputs.urldebloater.nixosModules.default ];
 
   services.urldebloater-desktop.enable = true;
   # services.urldebloater-desktop.autostart = false; # optional

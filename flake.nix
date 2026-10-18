@@ -57,8 +57,6 @@
         rustPlatform = pkgs.rustPlatform;
       };
 
-      linuxPkgs = pkgsFor "x86_64-linux";
-      mixerOutput = mixerFor linuxPkgs;
     in
     {
       packages = forAllSystems (
@@ -86,7 +84,7 @@
       });
 
       nixosModules = {
-        default = mixerOutput.module;
+        default = import ./nix/desktop/nixos.nix { inherit self; };
         desktop = import ./nix/desktop/nixos.nix { inherit self; };
       };
 
