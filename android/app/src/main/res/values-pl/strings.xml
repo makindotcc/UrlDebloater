@@ -11,6 +11,8 @@
     <string name="home_wash_error">Nie udało się oczyścić tekstu.</string>
     <string name="home_clipboard_error">Nie udało się oczyścić schowka.</string>
     <string name="home_clipboard_empty_error">Schowek nie zawiera tekstu.</string>
+    <string name="home_wash_empty_error">Nie ma czego czyścić.</string>
+    <string name="text_cleaned_message">Wyczyszczono</string>
     <string name="home_clipboard_cleaned_message">Oczyszczono schowek</string>
     <string name="settings_section_general">Ogólne</string>
     <string name="settings_section_redirects">Przekierowania</string>

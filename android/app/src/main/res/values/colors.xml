@@ -8,6 +8,6 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="brand_purple">#FF6650A4</color>
-    <color name="ic_shortcut_background">#FFFFFFFF</color>
     <color name="ic_launcher_background">@color/brand_purple</color>
+    <color name="ic_shortcut_background">#FFFFFFFF</color>
 </resources>

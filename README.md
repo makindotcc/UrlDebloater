@@ -136,7 +136,12 @@ https://github.com/makindotcc/UrlDebloater/assets/9150636/7e7de474-ffe9-49a2-ac8
 ## Android
 
 The settings screen uses Material 3 Expressive. Resetting settings to their defaults requires confirmation.
-The home screen washes arbitrary text in place through the same Rust implementation as desktop. Its **Clean clipboard** action cleans the current clipboard text directly, without manual pasting or copying. The same action is available as a Quick Settings tile and as a pinned home screen shortcut, which is added from the settings screen.
+The home screen washes arbitrary text in place through the same Rust implementation as desktop.
+Its **Clean clipboard** action cleans the current clipboard text directly, without manual pasting
+or copying. The same action is reachable from a Quick Settings tile, from a shortcut pinned to the
+home screen (added from the settings screen), and from the launcher long-press menu. Other apps can
+send text through *Share*, and selected text can be cleaned in place through the text selection
+menu; both of those clean the incoming text without touching the clipboard first.
 
 ### Native build
 

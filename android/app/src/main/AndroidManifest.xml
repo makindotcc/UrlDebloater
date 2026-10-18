@@ -32,6 +32,36 @@
             android:taskAffinity=""
             android:theme="@style/Theme.UrlDebloater.Transparent" />
 
+        <activity
+            android:name=".TextWashActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.UrlDebloater.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".ProcessTextAlias"
+            android:exported="true"
+            android:label="@string/text_debloat_action"
+            android:targetActivity=".TextWashActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <service
             android:name=".ClipboardWashTileService"
             android:exported="true"

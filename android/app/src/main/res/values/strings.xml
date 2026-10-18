@@ -12,6 +12,9 @@
     <string name="home_wash_error">Unable to clean the text.</string>
     <string name="home_clipboard_error">Unable to clean the clipboard.</string>
     <string name="home_clipboard_empty_error">Clipboard does not contain text.</string>
+    <string name="home_wash_empty_error">Nothing to clean.</string>
+    <string name="text_cleaned_message">Cleaned</string>
+    <string name="text_debloat_action" translatable="false">debloat</string>
     <string name="home_clipboard_cleaned_message">Clipboard cleaned</string>
     <string name="settings_section_general">General</string>
     <string name="settings_section_redirects">Redirects</string>

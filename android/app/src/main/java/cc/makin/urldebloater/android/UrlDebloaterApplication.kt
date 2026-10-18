@@ -6,5 +6,6 @@ class UrlDebloaterApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         NativeBridge.initTls(applicationContext)
+        publishClipboardShortcut(this)
     }
 }
