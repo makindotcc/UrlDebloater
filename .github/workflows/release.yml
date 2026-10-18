@@ -44,6 +44,24 @@ jobs:
           CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD }}
         run: cargo packager -p urldebloater-desktop-daemon --release --formats ${{ matrix.formats }}
 
+      - name: Verify macOS ad-hoc signatures
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          app="dist/UrlDebloater.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          unpacked=$(mktemp -d)
+          tar -xzf dist/UrlDebloater.app.tar.gz -C "$unpacked"
+          codesign --verify --deep --strict --verbose=2 "$unpacked/UrlDebloater.app"
+
+          dmgs=(dist/*.dmg)
+          test "${#dmgs[@]}" -eq 1
+          mountpoint=$(mktemp -d)
+          trap 'hdiutil detach "$mountpoint" -quiet' EXIT
+          hdiutil attach "${dmgs[0]}" -nobrowse -readonly -mountpoint "$mountpoint"
+          codesign --verify --deep --strict --verbose=2 "$mountpoint/UrlDebloater.app"
+
       - uses: actions/upload-artifact@v4
         with:
           name: urldebloater-${{ matrix.artifact }}

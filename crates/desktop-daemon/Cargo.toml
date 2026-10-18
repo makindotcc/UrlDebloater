@@ -59,6 +59,7 @@ icons = ["../../assets/icon/tray.png"]
 [package.metadata.packager.macos]
 background-app = true
 minimum-system-version = "11.0"
+signing-identity = "-"
 
 [package.metadata.packager.nsis]
 installMode = "currentUser"
