@@ -9,14 +9,14 @@ let
   inherit (pkgs) lib;
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
-  version = (fromTOML (builtins.readFile ../../crates/desktop-daemon/Cargo.toml)).package.version;
+  version = (lib.importTOML ../../crates/desktop-daemon/Cargo.toml).package.version;
 
-  settingsItem = pkgs.makeDesktopItem {
-    name = "urldebloater-config";
-    desktopName = "UrlDebloater Settings";
+  appItem = pkgs.makeDesktopItem {
+    name = "urldebloater";
+    desktopName = "UrlDebloater";
     genericName = "URL cleaner";
-    comment = "Choose how UrlDebloater washes links";
-    exec = "urldebloater-desktop-config-gui";
+    comment = "Remove tracking parameters from links copied to the clipboard";
+    exec = "urldebloater-desktop-daemon";
     icon = "urldebloater";
     terminal = false;
     categories = [ "Utility" ];
@@ -68,9 +68,7 @@ pkgs.rustPlatform.buildRustPackage {
   ''
   + lib.optionalString isLinux ''
     install -Dm644 ${../../assets/icon/tray.png} $out/share/icons/hicolor/256x256/apps/urldebloater.png
-  ''
-  + lib.optionalString (isLinux && configGui) ''
-    install -Dm644 ${settingsItem}/share/applications/urldebloater-config.desktop $out/share/applications/urldebloater-config.desktop
+    install -Dm644 ${appItem}/share/applications/urldebloater.desktop $out/share/applications/urldebloater.desktop
   ''
   + ''
     runHook postInstall

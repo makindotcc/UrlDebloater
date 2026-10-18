@@ -40,7 +40,10 @@ in
     autostart = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Start UrlDebloater when the graphical session starts.";
+      description = ''
+        Start UrlDebloater when the graphical session starts. On NixOS the daemon is also
+        restarted for logged-in graphical sessions after a system activation.
+      '';
     };
   };
 }

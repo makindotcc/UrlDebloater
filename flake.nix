@@ -24,7 +24,7 @@
           let
             base = baseNameOf path;
           in
-          !(builtins.elem base [
+          !(lib.elem base [
             "target"
             ".git"
             ".direnv"

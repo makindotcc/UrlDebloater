@@ -100,10 +100,13 @@ Import the flake's `nixosModules.desktop` and enable the service:
 }
 ```
 
-The module adds the package to `environment.systemPackages` and, unless `autostart = false`,
-starts the daemon through an XDG autostart entry. `configGui = false` builds the daemon without
-the `config-gui-integration` feature and does not install the settings window. Updates are
-managed by Nix; the application does not self-update.
+The module adds the package to `environment.systemPackages` and manages a systemd user service.
+With `autostart = true` (the default) the daemon starts with the graphical session and is
+restarted for already logged-in users after a system activation, so `nh os switch` /
+`nixos-rebuild switch` starts it immediately. The application launcher is named `UrlDebloater`
+and starts the daemon; the settings window is opened from the tray menu. `configGui = false`
+builds the daemon without the `config-gui-integration` feature and does not install the settings
+window. Updates are managed by Nix; the application does not self-update.
 
 ## nix-darwin
 
