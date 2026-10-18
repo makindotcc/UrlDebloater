@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +63,7 @@ private const val homeTextFieldMaxLines = 8
 
 private enum class HomeAction {
     CLEAN,
-    CLEAN_AND_COPY,
+    CLEAN_CLIPBOARD,
 }
 
 @Composable
@@ -72,36 +73,47 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
-    var output by rememberSaveable { mutableStateOf("") }
     var errorRes by rememberSaveable { mutableStateOf<Int?>(null) }
     var runningAction by remember { mutableStateOf<HomeAction?>(null) }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboard.current
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val copiedMessage = stringResource(R.string.home_copied_message)
+    val clipboardCleanedMessage = stringResource(R.string.home_clipboard_cleaned_message)
     val clipLabel = stringResource(R.string.app_name)
 
     fun runAction(action: HomeAction) {
-        if (runningAction != null || input.isBlank()) return
+        if (
+            runningAction != null ||
+            (action == HomeAction.CLEAN && input.isBlank())
+        ) return
 
         runningAction = action
-        output = ""
         errorRes = null
         scope.launch {
-            var copied = false
+            var clipboardCleaned = false
             try {
-                val cleaned = urlWasherAdapter.wash(input, settings)
-                output = cleaned
-                if (action == HomeAction.CLEAN_AND_COPY) {
-                    try {
-                        clipboard.setClipEntry(
-                            ClipEntry(ClipData.newPlainText(clipLabel, cleaned))
-                        )
-                        copied = true
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Exception) {
-                        errorRes = R.string.home_copy_error
+                when (action) {
+                    HomeAction.CLEAN -> {
+                        input = urlWasherAdapter.wash(input, settings)
+                    }
+
+                    HomeAction.CLEAN_CLIPBOARD -> {
+                        val clipText = clipboard.getClipEntry()
+                            ?.clipData
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                        if (clipText.isNullOrBlank()) {
+                            errorRes = R.string.home_clipboard_empty_error
+                        } else {
+                            val cleaned = urlWasherAdapter.wash(clipText, settings)
+                            clipboard.setClipEntry(
+                                ClipEntry(ClipData.newPlainText(clipLabel, cleaned))
+                            )
+                            clipboardCleaned = true
+                        }
                     }
                 }
             } catch (cancellation: CancellationException) {
@@ -109,12 +121,16 @@ fun HomeScreen(
             } catch (_: UrlWasherInitException) {
                 errorRes = R.string.settings_mixer_url_invalid
             } catch (_: Exception) {
-                errorRes = R.string.home_wash_error
+                errorRes = if (action == HomeAction.CLEAN_CLIPBOARD) {
+                    R.string.home_clipboard_error
+                } else {
+                    R.string.home_wash_error
+                }
             } finally {
                 runningAction = null
             }
-            if (copied) {
-                snackbarHostState.showSnackbar(copiedMessage)
+            if (clipboardCleaned) {
+                snackbarHostState.showSnackbar(clipboardCleanedMessage)
             }
         }
     }
@@ -173,30 +189,19 @@ fun HomeScreen(
                             label = stringResource(R.string.home_wash_action),
                         )
                     }
-                    Button(runAction
-                        onClick = { runAction(HomeAction.CLEAN_AND_COPY) },
-                        enabled = input.isNotBlank() && runningAction == null,
+                    Button(
+                        onClick = { runAction(HomeAction.CLEAN_CLIPBOARD) },
+                        enabled = runningAction == null,
                         modifier = Modifier
                             .weight(1f)
                             .height(homeButtonHeight),
                     ) {
                         HomeActionContent(
-                            isRunning = runningAction == HomeAction.CLEAN_AND_COPY,
-                            label = stringResource(R.string.home_clean_copy_action),
+                            isRunning = runningAction == HomeAction.CLEAN_CLIPBOARD,
+                            label = stringResource(R.string.home_clean_clipboard_action),
                         )
                     }
                 }
-                OutlinedTextField(
-                    value = output,
-                    onValueChange = {},
-                    label = { Text(stringResource(R.string.home_output_label)) },
-                    placeholder = { Text(stringResource(R.string.home_output_placeholder)) },
-                    readOnly = true,
-                    minLines = homeTextFieldMinLines,
-                    maxLines = homeTextFieldMaxLines,
-                    shape = MaterialTheme.shapes.extraLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 errorRes?.let {
                     Surface(
                         color = MaterialTheme.colorScheme.errorContainer,
