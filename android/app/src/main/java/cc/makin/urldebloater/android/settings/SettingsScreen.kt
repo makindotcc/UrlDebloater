@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import cc.makin.urldebloater.android.R
 import cc.makin.urldebloater.android.isClipboardShortcutSupported
+import cc.makin.urldebloater.android.requestClipboardOpenShortcut
 import cc.makin.urldebloater.android.requestClipboardShortcut
 import cc.makin.urldebloater.android.rust.RedirectWashPolicyDiscriminants
 import cc.makin.urldebloater.android.rust.TwitterPolicy
@@ -129,7 +130,10 @@ fun SettingsScreen(
                 SettingsDivider()
                 SettingsPreference(
                     iconRes = R.drawable.ic_content_cut,
-                    title = stringResource(R.string.settings_add_shortcut),
+                    title = stringResource(
+                        R.string.settings_add_shortcut,
+                        stringResource(R.string.home_clean_clipboard_action),
+                    ),
                     summary = stringResource(
                         if (shortcutSupported) {
                             R.string.settings_add_shortcut_summary
@@ -139,6 +143,23 @@ fun SettingsScreen(
                     ),
                     enabled = shortcutSupported,
                     onClick = { requestClipboardShortcut(context) },
+                )
+                SettingsDivider()
+                SettingsPreference(
+                    iconRes = R.drawable.ic_open_in_new,
+                    title = stringResource(
+                        R.string.settings_add_shortcut,
+                        stringResource(R.string.home_clean_open_action),
+                    ),
+                    summary = stringResource(
+                        if (shortcutSupported) {
+                            R.string.settings_add_open_shortcut_summary
+                        } else {
+                            R.string.settings_add_shortcut_unsupported
+                        }
+                    ),
+                    enabled = shortcutSupported,
+                    onClick = { requestClipboardOpenShortcut(context) },
                 )
             }
             SettingsSection(stringResource(R.string.settings_section_redirects)) {

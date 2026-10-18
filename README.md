@@ -73,6 +73,51 @@ Crates live in `crates/`:
 The iOS crate (`urldebloater-ios`) is not there yet; browser extensions are planned under
 `extensions/`.
 
+# Nix
+
+The flake packages both desktop binaries for Linux and macOS. On Linux the existing `mixer`
+remains the default package; on macOS `desktop` is the default.
+
+```sh
+nix build .#desktop
+nix run .#desktop
+```
+
+## NixOS
+
+Import the flake's `nixosModules.desktop` and enable the service:
+
+```nix
+{
+  imports = [ inputs.urldebloater.nixosModules.desktop ];
+
+  services.urldebloater-desktop.enable = true;
+  # services.urldebloater-desktop.autostart = false; # optional
+}
+```
+
+The package installs the tray daemon and the settings window. The module adds both to
+`environment.systemPackages` and, unless `autostart = false`, starts the daemon through an XDG
+autostart entry. Updates are managed by Nix; the application does not self-update.
+
+## nix-darwin
+
+Import the flake's `darwinModules.desktop` and enable the service:
+
+```nix
+{
+  imports = [ inputs.urldebloater.darwinModules.desktop ];
+
+  services.urldebloater-desktop.enable = true;
+  # services.urldebloater-desktop.startAtLogin = false; # optional
+}
+```
+
+The module installs the package into `environment.systemPackages` and, unless
+`startAtLogin = false`, manages a launchd agent in `/Library/LaunchAgents`. The agent starts in
+the Aqua session for each graphical user. Updates are managed by Nix; the application does not
+self-update.
+
 # Web landing page
 
 The landing page is a [Zola](https://www.getzola.org/) site in `web/`. It is plain HTML, CSS,
@@ -139,9 +184,11 @@ The settings screen uses Material 3 Expressive. Resetting settings to their defa
 The home screen washes arbitrary text in place through the same Rust implementation as desktop.
 Its **Clean clipboard** action cleans the current clipboard text directly, without manual pasting
 or copying. The same action is reachable from a Quick Settings tile, from a shortcut pinned to the
-home screen (added from the settings screen), and from the launcher long-press menu. Other apps can
-send text through *Share*, and selected text can be cleaned in place through the text selection
-menu; both of those clean the incoming text without touching the clipboard first.
+home screen, and from the launcher long-press menu. A second entry, also available as a tile, a
+pinned shortcut and a long-press item, cleans the clipboard and opens its link, asking which one to
+open when the text holds several. Other apps can send text through *Share*, and selected text can
+be cleaned in place through the text selection menu; both of those clean the incoming text without
+touching the clipboard first.
 
 ### Native build
 

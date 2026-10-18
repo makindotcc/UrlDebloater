@@ -15,12 +15,17 @@
     <string name="home_wash_empty_error">Nothing to clean.</string>
     <string name="text_cleaned_message">Cleaned</string>
     <string name="text_debloat_action" translatable="false">debloat</string>
+    <string name="home_clean_open_action">Clean &amp; open</string>
+    <string name="home_link_chooser_title">Which link to open?</string>
+    <string name="home_link_not_found">Clipboard has no link</string>
+    <string name="home_link_open_error">No app can open this link</string>
+    <string name="settings_add_open_shortcut_summary">Cleans the clipboard and opens its link</string>
     <string name="home_clipboard_cleaned_message">Clipboard cleaned</string>
     <string name="settings_section_general">General</string>
     <string name="settings_section_redirects">Redirects</string>
     <string name="settings_section_custom_domains">Custom domains</string>
     <string name="settings_use_clear_urls">Use ClearURLs database</string>
-    <string name="settings_add_shortcut">Add home screen shortcut</string>
+    <string name="settings_add_shortcut">Add “%1$s” shortcut</string>
     <string name="settings_add_shortcut_summary">Cleans the clipboard in one tap</string>
     <string name="settings_add_shortcut_unsupported">Not supported by your launcher</string>
     <string name="settings_redirect_wash_policy">Redirect wash policy</string>

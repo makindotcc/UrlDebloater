@@ -20,7 +20,7 @@ import java.io.File
 private const val clearurlsCacheFile = "clearurls-cache.json"
 private const val clipboardTextMimeType = "text/*"
 
-class ClipboardWashActivity : ComponentActivity() {
+open class ClipboardWashActivity : ComponentActivity() {
     private var started = false
     private var adapter: UrlWasherAdapter? = null
 
@@ -62,25 +62,31 @@ class ClipboardWashActivity : ComponentActivity() {
         val settings = SettingsStore(this).load()
         val washer = checkNotNull(adapter)
         lifecycleScope.launch {
-            val messageRes = try {
-                val cleaned = washer.wash(text, settings)
-                clipboard.setPrimaryClip(
-                    ClipData.newPlainText(getString(R.string.app_name), cleaned)
-                )
-                R.string.home_clipboard_cleaned_message
+            val cleaned = try {
+                washer.wash(text, settings).also { washed ->
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText(getString(R.string.app_name), washed)
+                    )
+                }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: UrlWasherInitException) {
-                R.string.settings_mixer_url_invalid
+                toastAndFinish(R.string.settings_mixer_url_invalid)
+                return@launch
             } catch (_: Exception) {
-                R.string.home_clipboard_error
+                toastAndFinish(R.string.home_clipboard_error)
+                return@launch
             }
-            Toast.makeText(this@ClipboardWashActivity, messageRes, Toast.LENGTH_SHORT).show()
-            finish()
+            onCleaned(cleaned)
         }
     }
 
-    private fun toastAndFinish(@StringRes messageRes: Int) {
+    protected open fun onCleaned(cleaned: String) {
+        Toast.makeText(this, R.string.home_clipboard_cleaned_message, Toast.LENGTH_SHORT).show()
+        finish()
+    }
+
+    protected fun toastAndFinish(@StringRes messageRes: Int) {
         Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
         finish()
     }
