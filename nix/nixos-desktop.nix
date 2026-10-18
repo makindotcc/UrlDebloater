@@ -21,22 +21,7 @@ let
   };
 in
 {
-  options.services.urldebloater-desktop = {
-    enable = lib.mkEnableOption "the UrlDebloater desktop tray application";
-
-    package = lib.mkOption {
-      type = lib.types.package;
-      default = self.packages.${pkgs.stdenv.hostPlatform.system}.desktop;
-      defaultText = lib.literalExpression "self.packages.\${pkgs.stdenv.hostPlatform.system}.desktop";
-      description = "UrlDebloater desktop package to use.";
-    };
-
-    autostart = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      description = "Start UrlDebloater when the graphical session starts.";
-    };
-  };
+  imports = [ (import ./desktop-options.nix { inherit self; }) ];
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];

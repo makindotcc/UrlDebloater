@@ -5,10 +5,7 @@ use arboard::Clipboard;
 use log::{error, info};
 use std::{
     pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
@@ -28,7 +25,8 @@ pub(crate) const CLIPBOARD_PAUSE_DURATION: Duration = Duration::from_secs(30);
 struct App {
     config: Config,
     clipboard_service: ClipboardService,
-    config_gui_running: Arc<AtomicBool>,
+    #[cfg(feature = "config-gui-integration")]
+    config_gui_running: Arc<std::sync::atomic::AtomicBool>,
     text_washer: Arc<TextWasher>,
     wash_task: Option<WashTask>,
     app_event_tx: mpsc::Sender<AppEvent>,
@@ -50,7 +48,8 @@ impl App {
             text_washer: Arc::new(text_washer),
             config,
             clipboard_service,
-            config_gui_running: Arc::new(AtomicBool::new(false)),
+            #[cfg(feature = "config-gui-integration")]
+            config_gui_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             wash_task: None,
             clipboard_pause_state: None,
             app_event_tx,
@@ -69,6 +68,7 @@ impl App {
                         AppCommand::ClearClipboard => self.clear_clipboard(WashMode::Manual),
                         AppCommand::ToggleClipboardDebloater => self.toggle_clipboard_debloater(),
                         AppCommand::ReloadConfig => self.reload_config().await,
+                        #[cfg(feature = "config-gui-integration")]
                         AppCommand::OpenConfigGui => self.open_config_gui(),
                         AppCommand::Exit => {
                             info!("Exiting application...");
@@ -165,8 +165,12 @@ impl App {
             });
     }
 
+    #[cfg(feature = "config-gui-integration")]
     fn open_config_gui(&self) {
-        if self.config_gui_running.swap(true, Ordering::Relaxed) {
+        if self
+            .config_gui_running
+            .swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
             info!("Configuration window is already open");
             return;
         }
@@ -201,6 +205,7 @@ pub enum AppCommand {
     ClearClipboard,
     ToggleClipboardDebloater,
     ReloadConfig,
+    #[cfg(feature = "config-gui-integration")]
     OpenConfigGui,
     Exit,
 }

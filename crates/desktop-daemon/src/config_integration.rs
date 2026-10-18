@@ -1,23 +1,30 @@
 use crate::app::AppCommand;
 use log::error;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
-use tokio::{process::Command, sync::mpsc};
+use tokio::sync::mpsc;
 
 const RELOAD_DEBOUNCE: Duration = Duration::from_millis(300);
+#[cfg(feature = "config-gui-integration")]
 const CONFIG_GUI_BIN: &str = "urldebloater-desktop-config-gui";
 
-pub fn open_gui(running: Arc<AtomicBool>) {
+#[cfg(feature = "config-gui-integration")]
+pub fn open_gui(running: Arc<std::sync::atomic::AtomicBool>) {
+    use std::sync::atomic::Ordering;
+
     let Some(exe) = config_gui_path() else {
         error!("Configuration window not found next to the application binary");
         return;
     };
     let path = urldebloater_desktop_config::config_path();
-    match Command::new(&exe).arg("--config").arg(&path).spawn() {
+    match tokio::process::Command::new(&exe)
+        .arg("--config")
+        .arg(&path)
+        .spawn()
+    {
         Ok(mut child) => {
             tokio::spawn(async move {
                 match child.wait().await {
@@ -37,6 +44,7 @@ pub fn open_gui(running: Arc<AtomicBool>) {
     }
 }
 
+#[cfg(feature = "config-gui-integration")]
 fn config_gui_path() -> Option<std::path::PathBuf> {
     let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
     let name = if cfg!(windows) {

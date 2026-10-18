@@ -83,6 +83,9 @@ nix build .#desktop
 nix run .#desktop
 ```
 
+The package accepts `configGui = false` through `.override`, for example
+`inputs.urldebloater.packages.${system}.desktop.override { configGui = false; }`.
+
 ## NixOS
 
 Import the flake's `nixosModules.desktop` and enable the service:
@@ -93,12 +96,14 @@ Import the flake's `nixosModules.desktop` and enable the service:
 
   services.urldebloater-desktop.enable = true;
   # services.urldebloater-desktop.autostart = false; # optional
+  # services.urldebloater-desktop.configGui = false;  # daemon only, no settings window
 }
 ```
 
-The package installs the tray daemon and the settings window. The module adds both to
-`environment.systemPackages` and, unless `autostart = false`, starts the daemon through an XDG
-autostart entry. Updates are managed by Nix; the application does not self-update.
+The module adds the package to `environment.systemPackages` and, unless `autostart = false`,
+starts the daemon through an XDG autostart entry. `configGui = false` builds the daemon without
+the `config-gui-integration` feature and does not install the settings window. Updates are
+managed by Nix; the application does not self-update.
 
 ## nix-darwin
 
@@ -109,14 +114,16 @@ Import the flake's `darwinModules.desktop` and enable the service:
   imports = [ inputs.urldebloater.darwinModules.desktop ];
 
   services.urldebloater-desktop.enable = true;
-  # services.urldebloater-desktop.startAtLogin = false; # optional
+  # services.urldebloater-desktop.autostart = false; # optional
+  # services.urldebloater-desktop.configGui = false;  # daemon only, no settings window
 }
 ```
 
 The module installs the package into `environment.systemPackages` and, unless
-`startAtLogin = false`, manages a launchd agent in `/Library/LaunchAgents`. The agent starts in
-the Aqua session for each graphical user. Updates are managed by Nix; the application does not
-self-update.
+`autostart = false`, manages a launchd agent in `/Library/LaunchAgents`. The agent starts in the
+Aqua session for each graphical user. `configGui = false` builds the daemon without the
+`config-gui-integration` feature and does not install the settings window. Updates are managed
+by Nix; the application does not self-update.
 
 # Web landing page
 

@@ -110,6 +110,7 @@ pub(crate) mod platform {
                     ..Default::default()
                 }
                 .into(),
+                #[cfg(feature = "config-gui-integration")]
                 StandardItem {
                     label: "Settings".into(),
                     activate: Box::new(|tray: &mut Self| tray.send(AppCommand::OpenConfigGui)),
@@ -271,11 +272,16 @@ pub(crate) mod platform {
                 try_send_command(&command_tx, AppCommand::ClearClipboard);
             } else if menu_item_ids.pause_clipboard_debloat == id {
                 try_send_command(&command_tx, AppCommand::ToggleClipboardDebloater);
-            } else if menu_item_ids.settings == id {
-                try_send_command(&command_tx, AppCommand::OpenConfigGui);
             } else if menu_item_ids.exit == id {
                 try_send_command(&command_tx, AppCommand::Exit);
             } else {
+                #[cfg(feature = "config-gui-integration")]
+                {
+                    if menu_item_ids.settings == id {
+                        try_send_command(&command_tx, AppCommand::OpenConfigGui);
+                        return;
+                    }
+                }
                 debug!("Ignoring tray menu event for '{id}'");
             }
         }));
@@ -388,8 +394,8 @@ pub(crate) mod platform {
     struct MenuItems {
         debloat_clipboard: MenuItem,
         pause_clipboard_debloat: MenuItem,
+        #[cfg(feature = "config-gui-integration")]
         settings: MenuItem,
-        reload_config: MenuItem,
         exit: MenuItem,
     }
 
@@ -398,6 +404,7 @@ pub(crate) mod platform {
             Self {
                 debloat_clipboard: MenuItem::new("Debloat clipboard", true, None),
                 pause_clipboard_debloat: MenuItem::new(&pause_clipboard_title(None), true, None),
+                #[cfg(feature = "config-gui-integration")]
                 settings: MenuItem::new("Settings", true, None),
                 exit: MenuItem::new("Exit", true, None),
             }
@@ -427,6 +434,7 @@ pub(crate) mod platform {
             MenuItemIds {
                 debloat_clipboard: self.debloat_clipboard.id().0.clone(),
                 pause_clipboard_debloat: self.pause_clipboard_debloat.id().0.clone(),
+                #[cfg(feature = "config-gui-integration")]
                 settings: self.settings.id().0.clone(),
                 exit: self.exit.id().0.clone(),
             }
@@ -436,6 +444,7 @@ pub(crate) mod platform {
     struct MenuItemIds {
         debloat_clipboard: String,
         pause_clipboard_debloat: String,
+        #[cfg(feature = "config-gui-integration")]
         settings: String,
         exit: String,
     }
@@ -445,6 +454,7 @@ pub(crate) mod platform {
         menu_items
             .sync_clipboard_items(&menu, clipboard_debloater_enabled)
             .context("build clipboard tray items")?;
+        #[cfg(feature = "config-gui-integration")]
         menu.append(&menu_items.settings)
             .context("build tray item 'Settings'")?;
         menu.append(&menu_items.exit)

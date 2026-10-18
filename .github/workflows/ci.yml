@@ -16,6 +16,7 @@ jobs:
         run: |
           cargo test -p urldebloater-desktop-config
           cargo build --workspace --locked
+          cargo check -p urldebloater-desktop-daemon --no-default-features --locked
 
   windows:
     runs-on: windows-latest
@@ -24,9 +25,13 @@ jobs:
       # The window itself imports native WinUI 3 types, so only type-checking is
       # meaningful without the Windows App SDK runtime.
       - run: cargo check -p urldebloater-desktop-config-gui --locked
+      - run: cargo check -p urldebloater-desktop-daemon --locked
+      - run: cargo check -p urldebloater-desktop-daemon --no-default-features --locked
 
   macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - run: cargo check -p urldebloater-desktop-config-gui --locked
+      - run: cargo check -p urldebloater-desktop-daemon --locked
+      - run: cargo check -p urldebloater-desktop-daemon --no-default-features --locked

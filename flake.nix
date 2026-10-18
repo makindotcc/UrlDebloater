@@ -43,12 +43,8 @@
 
       desktopFor =
         pkgs:
-        import ./nix/desktop.nix {
-          inherit
-            pkgs
-            src
-            cargoLock
-            ;
+        pkgs.callPackage ./nix/desktop.nix {
+          inherit src cargoLock;
         };
 
       mixerFor = pkgs: import ./nix/mixer.nix {
