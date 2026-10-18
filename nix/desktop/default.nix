@@ -9,7 +9,7 @@ let
   inherit (pkgs) lib;
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
-  version = (lib.importTOML ../../crates/desktop-daemon/Cargo.toml).package.version;
+  version = (lib.importTOML ../../Cargo.toml).workspace.package.version;
 
   appItem = pkgs.makeDesktopItem {
     name = "urldebloater";

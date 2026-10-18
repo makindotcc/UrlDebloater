@@ -13,7 +13,7 @@
 }:
 
 let
-  version = (fromTOML (builtins.readFile "${src}/crates/urlwasher-wasm/Cargo.toml")).package.version;
+  version = (lib.importTOML (src + "/Cargo.toml")).workspace.package.version;
 
   wasm = rustPlatform.buildRustPackage {
     pname = "urldebloater-urlwasher-wasm";

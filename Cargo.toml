@@ -2,6 +2,9 @@
 members = ["crates/*"]
 resolver = "2"
 
+[workspace.package]
+version = "0.2.1"
+
 [workspace.dependencies]
 urldebloater-desktop-config = { path = "crates/desktop-config" }
 urldebloater-urlwasher = { path = "crates/urlwasher" }

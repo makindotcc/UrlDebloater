@@ -90,14 +90,8 @@ jobs:
           ndk-version: r27d
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked --version 4.1.2
-      - name: Set Android version
-        run: |
-          version_name="0.0.0-ci.$GITHUB_RUN_NUMBER"
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            version_name="${GITHUB_REF_NAME#v}"
-          fi
-          echo "ANDROID_VERSION_NAME=$version_name" >> "$GITHUB_ENV"
-          echo "ANDROID_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+      - name: Set Android version code
+        run: echo "ANDROID_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
       - name: Restore Android signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -130,7 +124,11 @@ jobs:
           apk="android/app/build/outputs/apk/release/app-release.apk"
           "$ANDROID_SDK_ROOT/build-tools/36.1.0/apksigner" verify --verbose --print-certs "$apk"
           mkdir -p dist
-          cp "$apk" "dist/UrlDebloater_${ANDROID_VERSION_NAME}.apk"
+          version_name=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            test "$version_name" = "${GITHUB_REF_NAME#v}"
+          fi
+          cp "$apk" "dist/UrlDebloater_${version_name}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: urldebloater-android
@@ -154,7 +152,7 @@ jobs:
       - name: Verify Cargo version matches tag
         shell: bash
         run: |
-          version=$(python3 -c 'import tomllib; print(tomllib.load(open("crates/desktop-daemon/Cargo.toml", "rb"))["package"]["version"])')
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
           test "$version" = "${GITHUB_REF_NAME#v}"
 
       - name: Generate update manifest

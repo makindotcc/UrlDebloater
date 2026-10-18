@@ -11,7 +11,7 @@ let
 
   package = rustPlatform.buildRustPackage {
     pname = "urldebloater-mixer";
-    version = "0.1.2";
+    version = (pkgs.lib.importTOML ../../Cargo.toml).workspace.package.version;
     inherit src cargoLock;
 
     cargoBuildFlags = [

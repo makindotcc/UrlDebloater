@@ -62,7 +62,16 @@ val releaseJniLibsDir = layout.buildDirectory.dir("generated/cargo-ndk/release/j
 val androidVersionCode = providers.environmentVariable("ANDROID_VERSION_CODE")
     .map { it.toInt() }
     .getOrElse(1)
-val androidVersionName = providers.environmentVariable("ANDROID_VERSION_NAME").getOrElse("1.0")
+val androidVersionName = providers.fileContents(
+    layout.projectDirectory.file("../../Cargo.toml")
+).asText.map { manifest ->
+    manifest.lineSequence()
+        .firstOrNull { it.trimStart().startsWith("version = ") }
+        ?.substringAfter('"', "")
+        ?.substringBefore('"', "")
+        ?.takeIf { it.isNotEmpty() }
+        ?: error("Workspace version not found in Cargo.toml")
+}.get()
 val androidKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_PATH")
 val androidKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD")
 val androidKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS")

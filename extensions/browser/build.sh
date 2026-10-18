@@ -12,6 +12,9 @@ wasm-pack build ../../crates/urlwasher-wasm --target web --release \
   --out-dir ../../extensions/browser/wasm \
   --out-name urldebloater_urlwasher_wasm --no-typescript
 
+version=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' ../../Cargo.toml | head -n 1)
+test -n "$version"
+
 for target in chrome firefox; do
   rm -rf "dist/$target"
   mkdir -p "dist/$target"
@@ -19,7 +22,8 @@ for target in chrome firefox; do
   if [ "$target" = chrome ]; then
     cp wait.html wait.js "dist/$target/"
   fi
-  cp "manifest.$target.json" "dist/$target/manifest.json"
+  sed "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" \
+    "manifest.$target.json" > "dist/$target/manifest.json"
   cp -R wasm "dist/$target/wasm"
   cp -R _locales "dist/$target/_locales"
   cp ../../assets/icon/tray.png "dist/$target/icon.png"
