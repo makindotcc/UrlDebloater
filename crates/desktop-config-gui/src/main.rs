@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 //! Configuration window. Runs as a separate process spawned by the tray, so the
 //! application itself does not pay for the GUI runtime while the window is closed.
 
@@ -64,6 +66,7 @@ struct FormDraft {
     redirect_wash_policy: RedirectWashPolicyDiscriminants,
     mixer_url: String,
     use_clear_urls: bool,
+    check_for_updates: bool,
     twitter_policy: TwitterPolicy,
 }
 
@@ -86,6 +89,7 @@ impl From<Config> for FormDraft {
                 .mixer_url()
                 .map_or_else(|| String::from(PUBLIC_MIXER_INSTANCE), Url::to_string),
             use_clear_urls: config.use_clear_urls,
+            check_for_updates: config.check_for_updates,
             twitter_policy: config.twitter_policy,
         }
     }
@@ -120,6 +124,12 @@ fn config_form(open: Signal<bool>, path: PathBuf, saved: Signal<Config>) -> impl
                         @change=move |checked| draft.update(|draft| draft.use_clear_urls = checked)
                     >
                         "Use Clear URLs database"
+                    </Checkbox>
+                    <Checkbox
+                        checked=move || draft.with(|draft| draft.check_for_updates)
+                        @change=move |checked| draft.update(|draft| draft.check_for_updates = checked)
+                    >
+                        "Check for updates"
                     </Checkbox>
                 </Row>
                 <Button
@@ -274,6 +284,7 @@ fn collect_config(saved: &Config, draft: &FormDraft) -> Result<Config> {
             RedirectWashPolicyDiscriminants::Locally => RedirectWashPolicy::Locally,
         },
         use_clear_urls: draft.use_clear_urls,
+        check_for_updates: draft.check_for_updates,
         twitter_policy: draft.twitter_policy,
         ..saved.clone()
     })

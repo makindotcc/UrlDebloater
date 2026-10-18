@@ -73,6 +73,62 @@ Crates live in `crates/`:
 The iOS crate (`urldebloater-ios`) is not there yet; browser extensions are planned under
 `extensions/`.
 
+# Packaging
+
+Desktop installers are built with `cargo-packager`; the configuration lives in
+`crates/desktop-daemon/Cargo.toml` under `package.metadata.packager`. Artifacts are written to
+`dist/`.
+
+```sh
+cargo install cargo-packager --locked --version 0.11.8
+```
+
+Linux (GTK 4.10+ and libadwaita 1.4+ development files; Ubuntu 24.04 or newer. The AppImage
+build downloads `linuxdeploy`):
+
+```sh
+sudo apt-get install libgtk-4-dev libadwaita-1-dev patchelf file pkg-config dpkg-dev librsvg2-dev libgirepository1.0-dev
+APPIMAGE_EXTRACT_AND_RUN=1 cargo packager -p urldebloater-desktop-daemon --release --formats deb,appimage
+```
+
+Windows:
+
+```powershell
+cargo packager -p urldebloater-desktop-daemon --release --formats nsis
+```
+
+macOS:
+
+```sh
+cargo packager -p urldebloater-desktop-daemon --release --formats app,dmg
+```
+
+The tag-triggered workflow `.github/workflows/release.yml` builds NSIS, deb/AppImage, and
+app/DMG artifacts and attaches them to a GitHub release. The Cargo package version must match
+the `v*` tag. Linux artifacts are built on Ubuntu 24.04 (glibc 2.39 baseline), and the macOS job
+produces arm64 packages. The Windows installer checks for Windows App Runtime 2.4+ and, if it is
+missing, downloads the signed Microsoft runtime installer from `aka.ms` during setup (about
+120 MB; network required). macOS packages are unsigned unless signing credentials are supplied
+separately.
+
+## Updates
+
+The daemon checks
+`https://github.com/makindotcc/UrlDebloater/releases/latest/download/latest.json` every 24 hours
+and on demand. It never downloads or installs an update automatically: a yellow dot and an
+`Update available` item appear in the tray, and the update starts only when the item is clicked.
+There are no desktop notifications.
+
+Updates are installed only for AppImage builds on Linux, NSIS builds on Windows, and `.app`
+bundles on macOS. NixOS, deb, and other managed installs show the information item but open the
+release page instead of replacing system files.
+
+Artifacts are signed with minisign by `cargo-packager`; the public key is
+`assets/update-public-key.txt`. The release workflow expects the matching private key in the
+`CARGO_PACKAGER_SIGN_PRIVATE_KEY` GitHub secret (plus the optional
+`CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD`). `latest.json` is generated from the `.sig` files by
+`scripts/generate-latest-json.py`.
+
 # Nix
 
 The flake packages both desktop binaries for Linux and macOS. On Linux the existing `mixer`

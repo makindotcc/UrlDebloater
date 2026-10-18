@@ -5,3 +5,5 @@ result
 .direnv
 web/public/
 web/static/wasm/
+dist/
+__pycache__/

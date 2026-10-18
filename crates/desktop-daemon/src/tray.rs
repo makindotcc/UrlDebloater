@@ -1,9 +1,59 @@
 use crate::app::CLIPBOARD_PAUSE_DURATION;
+use crate::update::UpdateStatus;
 use std::{ops::Sub, time::Instant};
 
 const APP_NAME: &str = "UrlDebloater";
 const TRAY_ID: &str = "urldebloater";
 const TRAY_ICON_SIZE: u32 = 32;
+
+fn update_label(status: &UpdateStatus) -> String {
+    match status {
+        UpdateStatus::Available { version } => format!("Update available: v{version}"),
+        UpdateStatus::Downloading {
+            downloaded, total, ..
+        } => match total.filter(|total| *total > 0) {
+            Some(total) => format!(
+                "Updating… {}%",
+                (downloaded.saturating_mul(100) / total).min(100)
+            ),
+            None => String::from("Updating…"),
+        },
+        UpdateStatus::Installing { .. } => String::from("Updating…"),
+        UpdateStatus::Failed {
+            version: Some(version),
+            ..
+        } => format!("Update available: v{version} (retry)"),
+        UpdateStatus::Failed { version: None, .. } => String::from("Update failed - retry"),
+        UpdateStatus::Idle | UpdateStatus::Checking => String::from("Update available"),
+    }
+}
+
+fn update_visible(status: &UpdateStatus) -> bool {
+    status.has_update()
+}
+
+fn update_enabled(status: &UpdateStatus) -> bool {
+    matches!(
+        status,
+        UpdateStatus::Available { .. }
+            | UpdateStatus::Failed {
+                version: Some(_),
+                ..
+            }
+    )
+}
+
+fn check_label(status: &UpdateStatus) -> &'static str {
+    match status {
+        UpdateStatus::Checking => "Checking for updates…",
+        UpdateStatus::Failed { version: None, .. } => "Update failed - retry",
+        _ => "Check for updates",
+    }
+}
+
+fn check_enabled(status: &UpdateStatus) -> bool {
+    !status.is_busy() && !status.has_update()
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ClipboardMenuVisibility {
@@ -34,9 +84,11 @@ fn pause_clipboard_title(expires_at: Option<Instant>) -> String {
 #[cfg(target_os = "linux")]
 pub(crate) mod platform {
     use super::{
-        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, clipboard_menu_visibility, pause_clipboard_title,
+        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, check_enabled, check_label, clipboard_menu_visibility,
+        pause_clipboard_title, update_enabled, update_label, update_visible,
     };
     use crate::app::{AppCommand, AppEvent};
+    use crate::update::UpdateStatus;
     use anyhow::Context;
     use ksni::{
         Icon, OfflineReason, ToolTip, Tray, TrayMethods,
@@ -51,10 +103,34 @@ pub(crate) mod platform {
         "assets/icon/tray_32.argb"
     ));
 
+    fn badged_icon() -> Vec<u8> {
+        const DOT: [u8; 4] = [0xFF, 0xF5, 0xC5, 0x42];
+        let mut data = TRAY_ICON_ARGB.to_vec();
+        let size = TRAY_ICON_SIZE as i32;
+        let center = size as f32 - 6.0;
+
+        for y in (size - 13)..size {
+            for x in (size - 13)..size {
+                let dx = x as f32 + 0.5 - center;
+                let dy = y as f32 + 0.5 - center;
+                let distance = dx * dx + dy * dy;
+                let offset = ((y * size + x) * 4) as usize;
+                if distance <= 5.0 * 5.0 {
+                    data[offset..offset + 4].copy_from_slice(&DOT);
+                } else if distance <= 6.3 * 6.3 {
+                    data[offset + 3] = 0;
+                }
+            }
+        }
+
+        data
+    }
+
     struct DebloaterTray {
         command_tx: mpsc::Sender<AppCommand>,
         clipboard_debloater_enabled: bool,
         pause_expires_at: Option<Instant>,
+        update_status: UpdateStatus,
     }
 
     impl DebloaterTray {
@@ -84,10 +160,15 @@ pub(crate) mod platform {
         }
 
         fn icon_pixmap(&self) -> Vec<Icon> {
+            let data = if self.update_status.has_update() || true {
+                badged_icon()
+            } else {
+                TRAY_ICON_ARGB.to_vec()
+            };
             vec![Icon {
                 width: TRAY_ICON_SIZE as i32,
                 height: TRAY_ICON_SIZE as i32,
-                data: TRAY_ICON_ARGB.to_vec(),
+                data,
             }]
         }
 
@@ -107,6 +188,21 @@ pub(crate) mod platform {
                     activate: Box::new(|tray: &mut Self| {
                         tray.send(AppCommand::ToggleClipboardDebloater)
                     }),
+                    ..Default::default()
+                }
+                .into(),
+                StandardItem {
+                    label: update_label(&self.update_status),
+                    visible: update_visible(&self.update_status),
+                    enabled: update_enabled(&self.update_status),
+                    activate: Box::new(|tray: &mut Self| tray.send(AppCommand::InstallUpdate)),
+                    ..Default::default()
+                }
+                .into(),
+                StandardItem {
+                    label: check_label(&self.update_status).into(),
+                    enabled: check_enabled(&self.update_status),
+                    activate: Box::new(|tray: &mut Self| tray.send(AppCommand::CheckForUpdates)),
                     ..Default::default()
                 }
                 .into(),
@@ -143,6 +239,7 @@ pub(crate) mod platform {
             command_tx,
             clipboard_debloater_enabled,
             pause_expires_at: None,
+            update_status: UpdateStatus::Idle,
         };
         let handle = tray
             .assume_sni_available(true)
@@ -164,6 +261,28 @@ pub(crate) mod platform {
                         })
                         .await;
                 }
+                AppEvent::UpdateStatusChanged(status) => {
+                    handle
+                        .update(|tray: &mut DebloaterTray| {
+                            tray.update_status = status;
+                        })
+                        .await;
+                }
+                AppEvent::UpdateProgress { downloaded, total } => {
+                    handle
+                        .update(|tray: &mut DebloaterTray| {
+                            if let UpdateStatus::Downloading {
+                                downloaded: current,
+                                total: current_total,
+                                ..
+                            } = &mut tray.update_status
+                            {
+                                *current = downloaded;
+                                *current_total = total;
+                            }
+                        })
+                        .await;
+                }
                 AppEvent::Exit => break,
             }
         }
@@ -182,6 +301,7 @@ pub(crate) mod platform {
                 command_tx,
                 clipboard_debloater_enabled,
                 pause_expires_at: None,
+                update_status: UpdateStatus::Idle,
             };
             tray.menu()
                 .into_iter()
@@ -196,6 +316,31 @@ pub(crate) mod platform {
             entries
                 .iter()
                 .any(|(entry_label, visible)| entry_label == label && *visible)
+        }
+
+        #[test]
+        fn update_item_appears_when_available() {
+            let (command_tx, _command_rx) = mpsc::channel(1);
+            let tray = DebloaterTray {
+                command_tx,
+                clipboard_debloater_enabled: true,
+                pause_expires_at: None,
+                update_status: UpdateStatus::Available {
+                    version: "0.2.0".into(),
+                },
+            };
+            let entries: Vec<(String, bool, bool)> = tray
+                .menu()
+                .into_iter()
+                .filter_map(|item| match item {
+                    MenuItem::Standard(item) => Some((item.label, item.visible, item.enabled)),
+                    _ => None,
+                })
+                .collect();
+
+            assert!(entries.iter().any(|(label, visible, enabled)| {
+                *visible && *enabled && label == "Update available: v0.2.0"
+            }));
         }
 
         #[test]
@@ -224,9 +369,11 @@ pub(crate) mod platform {
 #[cfg(not(target_os = "linux"))]
 pub(crate) mod platform {
     use super::{
-        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, clipboard_menu_visibility, pause_clipboard_title,
+        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, check_enabled, check_label, clipboard_menu_visibility,
+        pause_clipboard_title, update_enabled, update_label, update_visible,
     };
     use crate::app::{AppCommand, AppEvent};
+    use crate::update::UpdateStatus;
     use anyhow::Context;
     use log::{debug, error};
     use std::time::Instant;
@@ -272,6 +419,10 @@ pub(crate) mod platform {
                 try_send_command(&command_tx, AppCommand::ClearClipboard);
             } else if menu_item_ids.pause_clipboard_debloat == id {
                 try_send_command(&command_tx, AppCommand::ToggleClipboardDebloater);
+            } else if menu_item_ids.update == id {
+                try_send_command(&command_tx, AppCommand::InstallUpdate);
+            } else if menu_item_ids.check_updates == id {
+                try_send_command(&command_tx, AppCommand::CheckForUpdates);
             } else if menu_item_ids.exit == id {
                 try_send_command(&command_tx, AppCommand::Exit);
             } else {
@@ -303,6 +454,9 @@ pub(crate) mod platform {
             menu_items,
             menu: Some(menu),
             tray_icon: None,
+            update_status: UpdateStatus::Idle,
+            #[cfg(target_os = "macos")]
+            update_badge: None,
         };
         event_loop.run_app(&mut tray).context("run tray event loop")
     }
@@ -326,6 +480,9 @@ pub(crate) mod platform {
         menu_items: MenuItems,
         menu: Option<Menu>,
         tray_icon: Option<TrayIcon>,
+        update_status: UpdateStatus,
+        #[cfg(target_os = "macos")]
+        update_badge: Option<TrayIcon>,
     }
 
     impl TrayHandler {
@@ -343,6 +500,60 @@ pub(crate) mod platform {
                     .sync_clipboard_items(menu, clipboard_debloater_enabled)
             {
                 error!("Failed to update tray menu: {err:#}");
+            }
+        }
+
+        fn apply_update_status(&mut self, status: UpdateStatus) {
+            self.update_status = status;
+            self.sync_update_items();
+            self.update_icon();
+        }
+
+        fn apply_update_progress(&mut self, downloaded: u64, total: Option<u64>) {
+            if let UpdateStatus::Downloading {
+                downloaded: current,
+                total: current_total,
+                ..
+            } = &mut self.update_status
+            {
+                *current = downloaded;
+                *current_total = total;
+                self.sync_update_items();
+            }
+        }
+
+        fn sync_update_items(&mut self) {
+            let Some(menu) = &self.menu else {
+                return;
+            };
+            if let Err(err) = self.menu_items.sync_update_items(menu, &self.update_status) {
+                error!("Failed to update tray update items: {err:#}");
+            }
+        }
+
+        fn update_icon(&mut self) {
+            #[cfg(target_os = "windows")]
+            if let Some(tray_icon) = &self.tray_icon {
+                match create_icon(self.update_status.has_update()) {
+                    Ok(icon) => {
+                        if let Err(err) = tray_icon.set_icon(Some(icon)) {
+                            error!("Failed to update tray icon: {err:#}");
+                        }
+                    }
+                    Err(err) => error!("Failed to create tray icon: {err:#}"),
+                }
+            }
+
+            #[cfg(target_os = "macos")]
+            if self.update_status.has_update() {
+                if self.update_badge.is_none() {
+                    match create_update_badge() {
+                        Ok(badge) => self.update_badge = Some(badge),
+                        Err(err) => error!("Failed to create update badge: {err:#}"),
+                    }
+                }
+            } else {
+                self.update_badge = None;
             }
         }
     }
@@ -371,6 +582,12 @@ pub(crate) mod platform {
                 }) => {
                     self.apply_clipboard_status(clipboard_debloater_enabled, pause_expires_at);
                 }
+                UserEvent::App(AppEvent::UpdateStatusChanged(status)) => {
+                    self.apply_update_status(status);
+                }
+                UserEvent::App(AppEvent::UpdateProgress { downloaded, total }) => {
+                    self.apply_update_progress(downloaded, total);
+                }
                 UserEvent::App(AppEvent::Exit) => event_loop.exit(),
             }
         }
@@ -394,6 +611,8 @@ pub(crate) mod platform {
     struct MenuItems {
         debloat_clipboard: MenuItem,
         pause_clipboard_debloat: MenuItem,
+        update: MenuItem,
+        check_updates: MenuItem,
         #[cfg(feature = "config-gui-integration")]
         settings: MenuItem,
         exit: MenuItem,
@@ -404,6 +623,8 @@ pub(crate) mod platform {
             Self {
                 debloat_clipboard: MenuItem::new("Debloat clipboard", true, None),
                 pause_clipboard_debloat: MenuItem::new(&pause_clipboard_title(None), true, None),
+                update: MenuItem::new("Update available", false, None),
+                check_updates: MenuItem::new("Check for updates", true, None),
                 #[cfg(feature = "config-gui-integration")]
                 settings: MenuItem::new("Settings", true, None),
                 exit: MenuItem::new("Exit", true, None),
@@ -430,10 +651,20 @@ pub(crate) mod platform {
             )
         }
 
+        fn sync_update_items(&self, menu: &Menu, status: &UpdateStatus) -> anyhow::Result<()> {
+            self.update.set_text(update_label(status));
+            self.update.set_enabled(update_enabled(status));
+            self.check_updates.set_text(check_label(status));
+            self.check_updates.set_enabled(check_enabled(status));
+            sync_menu_item(menu, &self.update, update_visible(status), 2)
+        }
+
         fn to_ids(&self) -> MenuItemIds {
             MenuItemIds {
                 debloat_clipboard: self.debloat_clipboard.id().0.clone(),
                 pause_clipboard_debloat: self.pause_clipboard_debloat.id().0.clone(),
+                update: self.update.id().0.clone(),
+                check_updates: self.check_updates.id().0.clone(),
                 #[cfg(feature = "config-gui-integration")]
                 settings: self.settings.id().0.clone(),
                 exit: self.exit.id().0.clone(),
@@ -444,6 +675,8 @@ pub(crate) mod platform {
     struct MenuItemIds {
         debloat_clipboard: String,
         pause_clipboard_debloat: String,
+        update: String,
+        check_updates: String,
         #[cfg(feature = "config-gui-integration")]
         settings: String,
         exit: String,
@@ -454,11 +687,16 @@ pub(crate) mod platform {
         menu_items
             .sync_clipboard_items(&menu, clipboard_debloater_enabled)
             .context("build clipboard tray items")?;
+        menu.append(&menu_items.check_updates)
+            .context("build tray item 'Check for updates'")?;
         #[cfg(feature = "config-gui-integration")]
         menu.append(&menu_items.settings)
             .context("build tray item 'Settings'")?;
         menu.append(&menu_items.exit)
             .context("build tray item 'Exit'")?;
+        menu_items
+            .sync_update_items(&menu, &UpdateStatus::Idle)
+            .context("build update tray items")?;
         Ok(menu)
     }
 
@@ -481,14 +719,67 @@ pub(crate) mod platform {
             .with_id(TRAY_ID)
             .with_menu(Box::new(menu))
             .with_tooltip(APP_NAME)
-            .with_icon(create_icon()?)
+            .with_icon(create_icon(false)?)
             .with_icon_as_template(true)
             .build()
             .context("create tray icon")
     }
 
-    fn create_icon() -> anyhow::Result<Icon> {
-        Icon::from_rgba(TRAY_ICON_RGBA.to_vec(), TRAY_ICON_SIZE, TRAY_ICON_SIZE)
-            .context("create tray icon")
+    fn create_icon(badged: bool) -> anyhow::Result<Icon> {
+        let data = if badged {
+            badged_icon()
+        } else {
+            TRAY_ICON_RGBA.to_vec()
+        };
+        Icon::from_rgba(data, TRAY_ICON_SIZE, TRAY_ICON_SIZE).context("create tray icon")
+    }
+
+    fn badged_icon() -> Vec<u8> {
+        const DOT: [u8; 4] = [0xF5, 0xC5, 0x42, 0xFF];
+        let mut data = TRAY_ICON_RGBA.to_vec();
+        let size = TRAY_ICON_SIZE as i32;
+        let center = size as f32 - 6.0;
+
+        for y in (size - 13)..size {
+            for x in (size - 13)..size {
+                let dx = x as f32 + 0.5 - center;
+                let dy = y as f32 + 0.5 - center;
+                let distance = dx * dx + dy * dy;
+                let offset = ((y * size + x) * 4) as usize;
+                if distance <= 5.0 * 5.0 {
+                    data[offset..offset + 4].copy_from_slice(&DOT);
+                } else if distance <= 6.3 * 6.3 {
+                    data[offset + 3] = 0;
+                }
+            }
+        }
+
+        data
+    }
+
+    #[cfg(target_os = "macos")]
+    fn create_update_badge() -> anyhow::Result<TrayIcon> {
+        const BADGE_SIZE: u32 = 18;
+        let mut data = vec![0u8; (BADGE_SIZE * BADGE_SIZE * 4) as usize];
+        let center = BADGE_SIZE as f32 / 2.0;
+
+        for y in 0..BADGE_SIZE as i32 {
+            for x in 0..BADGE_SIZE as i32 {
+                let dx = x as f32 + 0.5 - center;
+                let dy = y as f32 + 0.5 - center;
+                if dx * dx + dy * dy <= 4.5 * 4.5 {
+                    let offset = ((y * BADGE_SIZE as i32 + x) * 4) as usize;
+                    data[offset..offset + 4].copy_from_slice(&[0xF5, 0xC5, 0x42, 0xFF]);
+                }
+            }
+        }
+
+        TrayIconBuilder::new()
+            .with_id("urldebloater-update")
+            .with_tooltip("Update available")
+            .with_icon(Icon::from_rgba(data, BADGE_SIZE, BADGE_SIZE)?)
+            .with_icon_as_template(false)
+            .build()
+            .context("create update badge")
     }
 }

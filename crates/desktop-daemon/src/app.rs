@@ -1,3 +1,4 @@
+use crate::update::{UpdateCommand, UpdateManager, UpdateStatus};
 use crate::{clipboard::ClipboardService, config_integration, tray};
 use anyhow::Context;
 use anyhow::anyhow;
@@ -31,6 +32,7 @@ struct App {
     wash_task: Option<WashTask>,
     app_event_tx: mpsc::Sender<AppEvent>,
     clipboard_pause_state: Option<ClipboardPauseState>,
+    update_command_tx: mpsc::Sender<UpdateCommand>,
 }
 
 struct ClipboardPauseState {
@@ -44,6 +46,9 @@ impl App {
         let clipboard = Clipboard::new().context("initialize clipboard")?;
         let clipboard_service = ClipboardService::new(clipboard);
         let text_washer = app_text_washer(&config, None).await;
+        let (update_command_tx, update_command_rx) = mpsc::channel(8);
+        let update_manager = UpdateManager::new(app_event_tx.clone(), config.check_for_updates);
+        tokio::spawn(update_manager.run(update_command_rx));
         Ok(Self {
             text_washer: Arc::new(text_washer),
             config,
@@ -53,6 +58,7 @@ impl App {
             wash_task: None,
             clipboard_pause_state: None,
             app_event_tx,
+            update_command_tx,
         })
     }
 
@@ -68,6 +74,8 @@ impl App {
                         AppCommand::ClearClipboard => self.clear_clipboard(WashMode::Manual),
                         AppCommand::ToggleClipboardDebloater => self.toggle_clipboard_debloater(),
                         AppCommand::ReloadConfig => self.reload_config().await,
+                        AppCommand::CheckForUpdates => self.send_update_command(UpdateCommand::Check),
+                        AppCommand::InstallUpdate => self.send_update_command(UpdateCommand::Install),
                         #[cfg(feature = "config-gui-integration")]
                         AppCommand::OpenConfigGui => self.open_config_gui(),
                         AppCommand::Exit => {
@@ -165,6 +173,12 @@ impl App {
             });
     }
 
+    fn send_update_command(&self, command: UpdateCommand) {
+        if let Err(err) = self.update_command_tx.try_send(command) {
+            error!("Failed to send update command: {err}");
+        }
+    }
+
     #[cfg(feature = "config-gui-integration")]
     fn open_config_gui(&self) {
         if self
@@ -198,6 +212,7 @@ impl App {
             .clear_urls()
             .map(|cu| cu.catalog());
         self.text_washer = Arc::new(app_text_washer(&self.config, catalog).await);
+        self.send_update_command(UpdateCommand::SetEnabled(self.config.check_for_updates));
     }
 }
 
@@ -205,6 +220,8 @@ pub enum AppCommand {
     ClearClipboard,
     ToggleClipboardDebloater,
     ReloadConfig,
+    CheckForUpdates,
+    InstallUpdate,
     #[cfg(feature = "config-gui-integration")]
     OpenConfigGui,
     Exit,
@@ -214,6 +231,11 @@ pub enum AppEvent {
     ClipboardStatusChanged {
         clipboard_debloater_enabled: bool,
         pause_expires_at: Option<Instant>,
+    },
+    UpdateStatusChanged(UpdateStatus),
+    UpdateProgress {
+        downloaded: u64,
+        total: Option<u64>,
     },
     Exit,
 }

@@ -1,7 +1,10 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 mod app;
 mod clipboard;
 mod config_integration;
 mod tray;
+mod update;
 
 use anyhow::Context;
 use log::info;

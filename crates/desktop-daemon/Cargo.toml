@@ -15,6 +15,7 @@ serde_json.workspace = true
 url.workspace = true
 env_logger.workspace = true
 notify.workspace = true
+cargo-packager-updater = "0.2.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = { version = "0.3", default-features = false, features = ["async-io"] }
@@ -38,3 +39,74 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
 [features]
 default = ["config-gui-integration"]
 config-gui-integration = []
+
+[package.metadata.packager]
+product-name = "UrlDebloater"
+identifier = "com.urldebloater.desktop"
+description = "Remove tracking parameters from links copied to the clipboard"
+authors = ["makindotcc"]
+publisher = "makindotcc"
+homepage = "https://github.com/makindotcc/UrlDebloater"
+before-packaging-command = "cargo build --release -p urldebloater-desktop-daemon -p urldebloater-desktop-config-gui"
+binaries-dir = "../../target/release"
+out-dir = "../../dist"
+binaries = [
+    { path = "urldebloater-desktop-daemon", main = true },
+    { path = "urldebloater-desktop-config-gui" },
+]
+icons = ["../../assets/icon/tray.png"]
+
+[package.metadata.packager.macos]
+background-app = true
+minimum-system-version = "11.0"
+
+[package.metadata.packager.nsis]
+installMode = "currentUser"
+preinstall-section = '''
+Section "-PreInstall"
+  nsis_tauri_utils::KillProcess "urldebloater-desktop-config-gui.exe"
+  Pop $0
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  FileOpen $0 "$PLUGINSDIR\ensure-runtime.ps1" w
+  FileWrite $0 "$$ErrorActionPreference = 'Stop'$\r$\n"
+  FileWrite $0 "$$ProgressPreference = 'SilentlyContinue'$\r$\n"
+  FileWrite $0 "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12$\r$\n"
+  FileWrite $0 "$$pkg = Get-AppxPackage -Name 'Microsoft.WindowsAppRuntime.2' | Where-Object { [version]$$_.Version -ge [version]'2.4.0.0' } | Select-Object -First 1$\r$\n"
+  FileWrite $0 "if ($$pkg) { exit 0 }$\r$\n"
+  FileWrite $0 "$$url = 'https://aka.ms/windowsappsdk/2.5/latest/windowsappruntimeinstall-x64.exe'$\r$\n"
+  FileWrite $0 "$$out = Join-Path $$env:TEMP 'WindowsAppRuntimeInstall-x64.exe'$\r$\n"
+  FileWrite $0 "Invoke-WebRequest -UseBasicParsing -Uri $$url -OutFile $$out$\r$\n"
+  FileWrite $0 "$$sig = Get-AuthenticodeSignature $$out$\r$\n"
+  FileWrite $0 "if ($$sig.Status -ne 'Valid' -or $$sig.SignerCertificate.Subject -notmatch 'Microsoft') { exit 1 }$\r$\n"
+  FileWrite $0 "$$p = Start-Process -FilePath $$out -ArgumentList '--quiet' -Wait -PassThru$\r$\n"
+  FileWrite $0 "if ($$p.ExitCode -ne 0) { $$p = Start-Process -FilePath $$out -ArgumentList '--quiet' -Verb RunAs -Wait -PassThru }$\r$\n"
+  FileWrite $0 "Remove-Item $$out -Force -ErrorAction SilentlyContinue$\r$\n"
+  FileWrite $0 "Start-Sleep -Seconds 2$\r$\n"
+  FileWrite $0 "$$pkg = Get-AppxPackage -Name 'Microsoft.WindowsAppRuntime.2' | Where-Object { [version]$$_.Version -ge [version]'2.4.0.0' } | Select-Object -First 1$\r$\n"
+  FileWrite $0 "if (-not $$pkg) { exit 1 }$\r$\n"
+  FileWrite $0 "exit 0$\r$\n"
+  FileClose $0
+
+  StrCpy $2 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+  IfFileExists "$2" powershell_found 0
+  StrCpy $2 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+  powershell_found:
+
+  DetailPrint "Checking Windows App Runtime..."
+  nsExec::ExecToStack '"$2" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\ensure-runtime.ps1"'
+  Pop $0
+  Pop $1
+  StrCmp $0 "0" runtime_ok
+    DetailPrint "Windows App Runtime install failed: $0"
+    Abort "Windows App Runtime 2.4 or newer is required. Install it from https://aka.ms/windowsappsdk and run setup again."
+  runtime_ok:
+SectionEnd
+'''
+
+[package.metadata.packager.deb]
+depends = ["libgtk-4-1", "libadwaita-1-0"]
+section = "utils"
+
+[package.metadata.packager.appimage.linuxdeploy-plugins]
+gtk = "https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh"

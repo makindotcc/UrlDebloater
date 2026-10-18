@@ -106,6 +106,12 @@ pub struct Config {
     pub clipboard_debloater: bool,
     pub twitter_policy: TwitterPolicy,
     pub use_clear_urls: bool,
+    #[serde(default = "default_true")]
+    pub check_for_updates: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Config {
@@ -116,6 +122,7 @@ impl Default for Config {
             clipboard_debloater: true,
             twitter_policy: TwitterPolicy::default(),
             use_clear_urls: true,
+            check_for_updates: true,
         }
     }
 }
@@ -176,6 +183,17 @@ mod tests {
             .mixer_url(),
             Some(&url)
         );
+    }
+
+    #[test]
+    fn missing_update_check_defaults_to_enabled() {
+        let path = temp_config_path("update-default");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut value = serde_json::to_value(Config::default()).unwrap();
+        value.as_object_mut().unwrap().remove("check_for_updates");
+        std::fs::write(&path, value.to_string()).unwrap();
+
+        assert!(load_from(&path).unwrap().check_for_updates);
     }
 
     #[test]
