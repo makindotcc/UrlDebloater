@@ -1,5 +1,6 @@
 package cc.makin.urldebloater.android
 
+import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,9 +34,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cc.makin.urldebloater.android.rust.UrlWasherInitException
@@ -75,9 +76,10 @@ fun HomeScreen(
     var errorRes by rememberSaveable { mutableStateOf<Int?>(null) }
     var runningAction by remember { mutableStateOf<HomeAction?>(null) }
     val scope = rememberCoroutineScope()
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
     val snackbarHostState = remember { SnackbarHostState() }
     val copiedMessage = stringResource(R.string.home_copied_message)
+    val clipLabel = stringResource(R.string.app_name)
 
     fun runAction(action: HomeAction) {
         if (runningAction != null || input.isBlank()) return
@@ -92,8 +94,12 @@ fun HomeScreen(
                 output = cleaned
                 if (action == HomeAction.CLEAN_AND_COPY) {
                     try {
-                        clipboardManager.setText(AnnotatedString(cleaned))
+                        clipboard.setClipEntry(
+                            ClipEntry(ClipData.newPlainText(clipLabel, cleaned))
+                        )
                         copied = true
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
                     } catch (_: Exception) {
                         errorRes = R.string.home_copy_error
                     }
@@ -167,7 +173,7 @@ fun HomeScreen(
                             label = stringResource(R.string.home_wash_action),
                         )
                     }
-                    Button(
+                    Button(runAction
                         onClick = { runAction(HomeAction.CLEAN_AND_COPY) },
                         enabled = input.isNotBlank() && runningAction == null,
                         modifier = Modifier
