@@ -37,7 +37,7 @@ https://github.com/makindotcc/UrlDebloater/assets/9150636/12d83dd8-9c60-4ada-94b
 
 # Configuration
 
-The tray menu's *Settings* entry opens the configuration window — a separate
+The tray menu's *Settings* entry opens the configuration window - a separate
 process (`urldebloater-desktop-config-gui`, expected next to the application binary), so
 nothing is allocated for it while it is closed. Saving reloads the configuration
 in the running application; no restart is needed.
