@@ -5015,7 +5015,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-channel",
- "js-sys",
  "serde_json",
  "url",
  "urldebloater-urlwasher",
