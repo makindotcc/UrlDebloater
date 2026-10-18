@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title data-i18n="waitTitle"></title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        display: grid;
+        margin: 0;
+        min-height: 100vh;
+        place-items: center;
+      }
+
+      main {
+        max-width: 36rem;
+        padding: 2rem;
+        text-align: center;
+      }
+
+      p {
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 data-i18n="waitTitle"></h1>
+      <p id="message" data-i18n="waitMessage"></p>
+    </main>
+    <script type="module" src="wait.js"></script>
+  </body>
+</html>

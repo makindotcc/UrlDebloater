@@ -68,10 +68,10 @@ Crates live in `crates/`:
 | `urldebloater-desktop-config` | desktop settings model, config path and atomic persistence |
 | `urldebloater-desktop-config-gui` | the settings window (native widgets via winio) |
 | `urldebloater-android` | Android `cdylib`, JNI initialization and UniFFI binding generator |
-| `urldebloater-urlwasher-wasm` | browser build of `TextWasher` with a mixer-backed redirect resolver |
+| `urldebloater-urlwasher-wasm` | browser build of `TextWasher` with local and mixer-backed redirect resolvers |
 
-The iOS crate (`urldebloater-ios`) is not there yet; browser extensions are planned under
-`extensions/`.
+The iOS crate (`urldebloater-ios`) is not there yet. The Chrome and Firefox extension lives in
+`extensions/browser/`; see [its README](extensions/browser/README.md) for build and load instructions.
 
 # Packaging
 

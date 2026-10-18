@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title data-i18n="optionsTitle"></title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        margin: 2rem auto;
+        max-width: 42rem;
+        padding: 0 1rem;
+      }
+
+      fieldset {
+        border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+        border-radius: 0.5rem;
+        margin: 1.5rem 0;
+        padding: 1rem;
+      }
+
+      .policy {
+        margin: 1rem 0;
+      }
+
+      .policy input {
+        margin-right: 0.5rem;
+      }
+
+      .description {
+        margin: 0.35rem 0 0 1.65rem;
+        max-width: 36rem;
+        opacity: 0.75;
+      }
+
+      .mixer-url {
+        display: block;
+        margin-top: 1.5rem;
+      }
+
+      #mixer-url {
+        box-sizing: border-box;
+        display: block;
+        margin-top: 0.5rem;
+        max-width: 32rem;
+        padding: 0.5rem;
+        width: 100%;
+      }
+
+      #status {
+        min-height: 1.5em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 data-i18n="optionsTitle"></h1>
+      <form id="settings-form">
+        <input id="enabled" type="checkbox">
+        <label for="enabled" data-i18n="enabledLabel"></label>
+
+        <fieldset>
+          <legend data-i18n="redirectPolicyLegend"></legend>
+
+          <div class="policy">
+            <input id="policy-off" name="redirectPolicy" type="radio" value="off">
+            <label for="policy-off" data-i18n="policyOffLabel"></label>
+          </div>
+
+          <div class="policy">
+            <input id="policy-local" name="redirectPolicy" type="radio" value="local">
+            <label for="policy-local" data-i18n="policyLocalLabel"></label>
+            <p class="description" data-i18n="policyLocalDescription"></p>
+          </div>
+
+          <div class="policy">
+            <input id="policy-mixer" name="redirectPolicy" type="radio" value="mixer">
+            <label for="policy-mixer" data-i18n="policyMixerLabel"></label>
+            <p class="description" data-i18n="policyMixerDescription"></p>
+          </div>
+        </fieldset>
+
+        <div class="mixer-url">
+          <label for="mixer-url" data-i18n="mixerUrlLabel"></label>
+          <input id="mixer-url" type="text" autocomplete="off" spellcheck="false" disabled>
+        </div>
+
+        <p id="status" role="status" aria-live="polite"></p>
+      </form>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

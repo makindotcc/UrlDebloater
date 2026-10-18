@@ -17,8 +17,21 @@ const CLEARURLS_RULES: &str = include_str!(concat!(
 ));
 
 #[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = fetch)]
+    fn fetch_with_request(request: &web_sys::Request) -> js_sys::Promise;
+}
+
+fn build_request(url: &str) -> Result<web_sys::Request, JsValue> {
+    let init = web_sys::RequestInit::new();
+    init.set_credentials(web_sys::RequestCredentials::Omit);
+    web_sys::Request::new_with_str_and_init(url, &init)
+}
+
+#[wasm_bindgen]
 pub struct UrlCleaner {
     with_short_links: TextWasher<MixerRedirectResolver>,
+    with_local_redirects: TextWasher<BrowserFetchResolver>,
     without_short_links: TextWasher<DefaultRedirectResolver>,
 }
 
@@ -44,6 +57,15 @@ impl UrlCleaner {
                     },
                 ),
             },
+            with_local_redirects: TextWasher {
+                url_washer: UrlWasher::new(
+                    BrowserFetchResolver,
+                    WasherConfig {
+                        clear_urls: Some(ClearUrls::new(catalog.clone())),
+                        twitter_policy: TwitterPolicy::Original,
+                    },
+                ),
+            },
             without_short_links: TextWasher {
                 url_washer: UrlWasher::new(
                     DefaultRedirectResolver::None,
@@ -58,6 +80,10 @@ impl UrlCleaner {
 
     pub async fn wash(&self, text: &str) -> String {
         self.with_short_links.wash(text).await
+    }
+
+    pub async fn wash_with_local_redirects(&self, text: &str) -> String {
+        self.with_local_redirects.wash(text).await
     }
 
     pub async fn wash_without_short_links(&self, text: &str) -> String {
@@ -91,12 +117,41 @@ impl RedirectResolver for MixerRedirectResolver {
     }
 }
 
+struct BrowserFetchResolver;
+
+impl RedirectResolver for BrowserFetchResolver {
+    fn resolve(&self, url: Url) -> impl Future<Output = anyhow::Result<Url>> + Send {
+        let (sender, receiver) = oneshot::channel();
+        spawn_local(async move {
+            let result = async move {
+                let request = build_request(url.as_str())
+                    .map_err(|error| anyhow!("build local redirect request: {error:?}"))?;
+                let response = JsFuture::from(fetch_with_request(&request))
+                    .await
+                    .map_err(|error| anyhow!("local redirect fetch failed: {error:?}"))?;
+                let response = response
+                    .dyn_into::<web_sys::Response>()
+                    .map_err(|_| anyhow!("local redirect fetch returned an unexpected value"))?;
+                Url::parse(&response.url()).context("parse final url after redirects")
+            }
+            .await;
+            let _ = sender.send(result);
+        });
+        async move {
+            receiver
+                .await
+                .map_err(|_| anyhow!("local redirect request was cancelled"))?
+        }
+    }
+}
+
 async fn fetch_mixer(mut mixer_url: Url, url: Url) -> anyhow::Result<Url> {
     mixer_url.set_path("wash");
     mixer_url.query_pairs_mut().append_pair("url", url.as_str());
 
-    let window = web_sys::window().context("browser window is unavailable")?;
-    let response = JsFuture::from(window.fetch_with_str(mixer_url.as_str()))
+    let request = build_request(mixer_url.as_str())
+        .map_err(|error| anyhow!("build mixer request: {error:?}"))?;
+    let response = JsFuture::from(fetch_with_request(&request))
         .await
         .map_err(|error| anyhow!("mixer fetch failed: {error:?}"))?;
     let response = response
