@@ -2,25 +2,68 @@
   pkgs,
   src,
   cargoLock,
-  rustPlatform,
 }:
 
-rustPlatform.buildRustPackage {
-  pname = "urldebloater";
-  version = "0.1.4";
-  inherit src cargoLock;
+let
+  inherit (pkgs) lib;
+  isLinux = pkgs.stdenv.hostPlatform.isLinux;
+
+  version =
+    (builtins.fromTOML (builtins.readFile ../crates/desktop-daemon/Cargo.toml)).package.version;
+
+  settingsItem = pkgs.makeDesktopItem {
+    name = "urldebloater-config";
+    desktopName = "UrlDebloater Settings";
+    genericName = "URL cleaner";
+    comment = "Choose how UrlDebloater washes links";
+    exec = "urldebloater-desktop-config-gui";
+    icon = "urldebloater";
+    terminal = false;
+    categories = [ "Utility" ];
+    startupNotify = false;
+  };
+in
+pkgs.rustPlatform.buildRustPackage {
+  pname = "urldebloater-desktop";
+  inherit version src cargoLock;
 
   cargoBuildFlags = [
     "-p"
-    "urldebloater"
+    "urldebloater-desktop-daemon"
+    "-p"
+    "urldebloater-desktop-config-gui"
   ];
   cargoTestFlags = [
     "-p"
-    "urldebloater"
+    "urldebloater-desktop-config"
   ];
 
   nativeBuildInputs = [
     pkgs.pkg-config
+  ] ++ lib.optional isLinux pkgs.wrapGAppsHook4;
+
+  buildInputs = lib.optionals isLinux [
+    pkgs.gtk4
+    pkgs.libadwaita
   ];
-  buildInputs = [ ];
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/bin
+    install -m755 target/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/release/urldebloater-desktop-daemon $out/bin/
+    install -m755 target/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/release/urldebloater-desktop-config-gui $out/bin/
+  '' + lib.optionalString isLinux ''
+    install -Dm644 ${../assets/icon/tray.png} $out/share/icons/hicolor/256x256/apps/urldebloater.png
+    install -Dm644 ${settingsItem}/share/applications/urldebloater-config.desktop $out/share/applications/urldebloater-config.desktop
+  '' + ''
+    runHook postInstall
+  '';
+
+  meta = {
+    description = "UrlDebloater desktop tray application and settings window";
+    homepage = "https://github.com/makindotcc/UrlDebloater";
+    mainProgram = "urldebloater-desktop-daemon";
+    platforms = lib.platforms.linux ++ lib.platforms.darwin;
+  };
 }

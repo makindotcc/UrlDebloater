@@ -9,54 +9,94 @@
       nixpkgs,
     }:
     let
-      linuxSystem = "x86_64-linux";
+      inherit (nixpkgs) lib;
+
       systems = [
-        linuxSystem
+        "x86_64-linux"
         "aarch64-darwin"
       ];
-      pkgs = import nixpkgs { system = linuxSystem; };
-      src = pkgs.lib.cleanSourceWith {
+      forAllSystems = lib.genAttrs systems;
+
+      src = lib.cleanSourceWith {
         src = ./.;
-        filter = path: _: (baseNameOf path) != "target";
+        filter =
+          path: _type:
+          let
+            base = baseNameOf path;
+          in
+          !(builtins.elem base [
+            "target"
+            ".git"
+            ".direnv"
+            "result"
+            ".gradle"
+            ".kotlin"
+            ".idea"
+            "node_modules"
+          ]);
       };
       cargoLock = {
         lockFile = ./Cargo.lock;
       };
-      stdenv = pkgs.useWildLinker pkgs.stdenv;
-      rustPlatform = pkgs.makeRustPlatform {
-        inherit (pkgs) cargo rustc;
-        inherit stdenv;
-      };
-      mixerOutput = import ./nix/mixer.nix {
+
+      pkgsFor = system: import nixpkgs { inherit system; };
+
+      desktopFor =
+        pkgs:
+        import ./nix/desktop.nix {
+          inherit
+            pkgs
+            src
+            cargoLock
+            ;
+        };
+
+      mixerFor = pkgs: import ./nix/mixer.nix {
         inherit
           self
           pkgs
           src
           cargoLock
-          rustPlatform
           ;
-      };
-    in
-    {
-      packages.${linuxSystem} = rec {
-        mixer = mixerOutput.package;
-        desktop = import ./nix/desktop.nix {
-          inherit
-            pkgs
-            src
-            cargoLock
-            rustPlatform
-            ;
-        };
-        default = mixer;
+        rustPlatform = pkgs.rustPlatform;
       };
 
-      devShells = pkgs.lib.genAttrs systems (system: {
+      linuxPkgs = pkgsFor "x86_64-linux";
+      mixerOutput = mixerFor linuxPkgs;
+    in
+    {
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+          desktop = desktopFor pkgs;
+        in
+        {
+          inherit desktop;
+        }
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          mixer = (mixerFor pkgs).package;
+          default = (mixerFor pkgs).package;
+        }
+        // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
+          default = desktop;
+        }
+      );
+
+      devShells = forAllSystems (system: {
         default = import ./nix/dev-shell.nix {
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = pkgsFor system;
         };
       });
 
-      nixosModules.default = mixerOutput.module;
+      nixosModules = {
+        default = mixerOutput.module;
+        desktop = import ./nix/nixos-desktop.nix { inherit self; };
+      };
+
+      darwinModules = {
+        default = import ./nix/darwin-desktop.nix { inherit self; };
+        desktop = import ./nix/darwin-desktop.nix { inherit self; };
+      };
     };
 }
