@@ -1,0 +1,24 @@
+<resources>
+    <string name="navbar_home">Główna</string>
+    <string name="navbar_settings">Ustawienia</string>
+    <string name="greeting">Cześć, %1$s!</string>
+    <string name="settings_section_general">Ogólne</string>
+    <string name="settings_section_redirects">Przekierowania</string>
+    <string name="settings_section_custom_domains">Własne domeny</string>
+    <string name="settings_clipboard_debloater">Debloatuj schowek</string>
+    <string name="settings_use_clear_urls">Używaj bazy Clear URLs</string>
+    <string name="settings_redirect_wash_policy">Polityka przekierowań</string>
+    <string name="settings_policy_ignore">Ignoruj przekierowania</string>
+    <string name="settings_policy_locally">Przetwarzaj lokalnie</string>
+    <string name="settings_policy_via_mixer">Przetwarzaj przez mixer</string>
+    <string name="settings_policy_via_mixer_privacy_notice">Opcja „Przetwarzaj przez mixer” wysyła linki z obsługiwanych serwisów do skonfigurowanego mixera. Właściciel tej instancji może zobaczyć te linki.</string>
+    <string name="settings_mixer_url">Adres URL mixera</string>
+    <string name="settings_mixer_url_invalid">Podaj poprawny URL, np. https://example.com</string>
+    <string name="settings_mixer_url_default">Domyślny</string>
+    <string name="settings_twitter_domain">Domena Twittera</string>
+    <string name="settings_reset_defaults">Przywróć domyślne</string>
+    <string name="settings_reset_confirmation">Wszystkie ustawienia zostaną przywrócone do wartości domyślnych.</string>
+    <string name="settings_reset_confirm">Przywróć</string>
+    <string name="settings_save">Zapisz</string>
+    <string name="settings_cancel">Anuluj</string>
+</resources>

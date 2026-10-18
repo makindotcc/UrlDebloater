@@ -23,7 +23,7 @@ Remove tracking params from URLs.
 ### Unshortening
 To unroll and debloat some URLs like vm.tiktok.com there is need to ask their servers for more information.
 UrlDebloater by default sends request from your network to resolve it.\
-There is possibility to use [mixer](mixer) (a web server exposing endpoint to unshort URL from network where mixer is hosted, it is AKA "proxy"). I host public instance of mixer at [https://urldebloater.makin.cc](https://urldebloater.makin.cc/). Using untrusted mixer instance may be privacy concern, but is this really scary for tiktok links?
+There is possibility to use [mixer](mixer) (a web server exposing endpoint to unshort URL from network where mixer is hosted, it is AKA "proxy"). I host public instance of mixer at [https://urldebloater.makin.cc](https://urldebloater.makin.cc/). The Android settings screen notes that *Resolve via mixer* sends links from supported services to the configured instance, whose owner can see them. Using untrusted mixer instance may be privacy concern, but is this really scary for tiktok links?
 
 ### Showcase
 
@@ -83,6 +83,8 @@ Maybe add shortcut action, so it can be painlessly run from home screen like her
 https://github.com/makindotcc/UrlDebloater/assets/9150636/7e7de474-ffe9-49a2-ac8c-f75f6006fd34
 
 ## Android
+
+The settings screen uses Material 3 Expressive. Resetting settings to their defaults requires confirmation.
 
 ### Todo
 

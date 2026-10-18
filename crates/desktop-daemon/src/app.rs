@@ -92,9 +92,11 @@ impl App {
                 washed = async { self.wash_task.as_mut().unwrap().await },
                     if self.wash_task.is_some() => {
                         self.wash_task = None;
-                        let current = self.clipboard_service.text();
-                        if washed != *current {
-                            let _ = self.clipboard_service.set_text(Arc::from(washed));
+                        if self.config.clipboard_debloater {
+                            let current = self.clipboard_service.text();
+                            if washed != *current {
+                                let _ = self.clipboard_service.set_text(Arc::from(washed));
+                            }
                         }
                     }
                 Some(()) = async {
