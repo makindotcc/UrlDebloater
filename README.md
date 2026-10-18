@@ -36,14 +36,14 @@ There is possibility to use [mixer](mixer) (a web server exposing endpoint to un
 ## Showcase
 
 Configuration window and tray:\
-![Configuration window and tray](assets/media/macos_showcase.png)
+<img src="assets/media/macos_showcase.png" alt="Configuration window and tray" width="600">
 
 https://github.com/makindotcc/UrlDebloater/assets/9150636/12d83dd8-9c60-4ada-94be-11afbf2ba260
 
 ### Android
 
 Android settings:\
-![Android settings](assets/media/android_settings.png)
+<img src="assets/media/android_settings.png" alt="Android settings" width="320">
 
 ### iOS
 
