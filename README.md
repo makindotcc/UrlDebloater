@@ -86,9 +86,19 @@ nix run .#desktop
 The package accepts `configGui = false` through `.override`, for example
 `inputs.urldebloater.packages.${system}.desktop.override { configGui = false; }`.
 
+The `web` package builds the landing page together with the WASM in-browser cleaner:
+
+```sh
+nix build .#web
+```
+
+It accepts `mixerUrl` and `baseUrl` through `.override`, for example
+`inputs.urldebloater.packages.${system}.web.override { mixerUrl = "https://urldebloater.makin.cc/"; baseUrl = "https://urldebloater.makin.cc/"; }`.
+
 ## NixOS
 
-Import the flake's `nixosModules.default` (also available as `nixosModules.desktop`) and enable the service:
+Import the flake's `nixosModules.default` (also available as `nixosModules.desktop`) and enable the service.
+The mixer server module remains available as `nixosModules.mixer`:
 
 ```nix
 {

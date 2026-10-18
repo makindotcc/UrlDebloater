@@ -47,16 +47,31 @@
           inherit src cargoLock;
         };
 
-      mixerFor = pkgs: import ./nix/mixer.nix {
-        inherit
-          self
-          pkgs
-          src
-          cargoLock
-          ;
-        rustPlatform = pkgs.rustPlatform;
-      };
+      mixerFor =
+        pkgs:
+        import ./nix/mixer.nix {
+          inherit
+            self
+            pkgs
+            src
+            cargoLock
+            ;
+          rustPlatform = pkgs.rustPlatform;
+        };
 
+      webFor =
+        pkgs:
+        let
+          wasmBindgenVersion =
+            (lib.findFirst (package: package.name == "wasm-bindgen")
+              (throw "wasm-bindgen is missing from Cargo.lock")
+              (fromTOML (builtins.readFile ./Cargo.lock)).package
+            ).version;
+        in
+        pkgs.callPackage ./nix/web.nix {
+          inherit src cargoLock;
+          wasmBindgenCli = pkgs."wasm-bindgen-cli_${lib.replaceStrings [ "." ] [ "_" ] wasmBindgenVersion}";
+        };
     in
     {
       packages = forAllSystems (
@@ -64,9 +79,10 @@
         let
           pkgs = pkgsFor system;
           desktop = desktopFor pkgs;
+          web = webFor pkgs;
         in
         {
-          inherit desktop;
+          inherit desktop web;
         }
         // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           mixer = (mixerFor pkgs).package;
@@ -86,6 +102,7 @@
       nixosModules = {
         default = import ./nix/desktop/nixos.nix { inherit self; };
         desktop = import ./nix/desktop/nixos.nix { inherit self; };
+        mixer = (mixerFor (pkgsFor "x86_64-linux")).module;
       };
 
       darwinModules = {
