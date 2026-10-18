@@ -58,7 +58,7 @@ let
             Group = serviceName;
           };
           environment = {
-            LISTEN_ADDRESS = builtins.toString config.services.${serviceName}.listenAddress;
+            LISTEN_ADDRESS = toString config.services.${serviceName}.listenAddress;
           };
         };
 

@@ -43,7 +43,7 @@
 
       desktopFor =
         pkgs:
-        pkgs.callPackage ./nix/desktop.nix {
+        pkgs.callPackage ./nix/desktop {
           inherit src cargoLock;
         };
 
@@ -87,12 +87,12 @@
 
       nixosModules = {
         default = mixerOutput.module;
-        desktop = import ./nix/nixos-desktop.nix { inherit self; };
+        desktop = import ./nix/desktop/nixos.nix { inherit self; };
       };
 
       darwinModules = {
-        default = import ./nix/darwin-desktop.nix { inherit self; };
-        desktop = import ./nix/darwin-desktop.nix { inherit self; };
+        default = import ./nix/desktop/darwin.nix { inherit self; };
+        desktop = import ./nix/desktop/darwin.nix { inherit self; };
       };
     };
 }

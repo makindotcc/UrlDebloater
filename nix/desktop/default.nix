@@ -9,7 +9,7 @@ let
   inherit (pkgs) lib;
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
-  version = (fromTOML (builtins.readFile ../crates/desktop-daemon/Cargo.toml)).package.version;
+  version = (fromTOML (builtins.readFile ../../crates/desktop-daemon/Cargo.toml)).package.version;
 
   settingsItem = pkgs.makeDesktopItem {
     name = "urldebloater-config";
@@ -62,7 +62,7 @@ pkgs.rustPlatform.buildRustPackage {
     install -m755 target/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/release/urldebloater-desktop-config-gui $out/bin/
   ''
   + lib.optionalString isLinux ''
-    install -Dm644 ${../assets/icon/tray.png} $out/share/icons/hicolor/256x256/apps/urldebloater.png
+    install -Dm644 ${../../assets/icon/tray.png} $out/share/icons/hicolor/256x256/apps/urldebloater.png
   ''
   + lib.optionalString (isLinux && configGui) ''
     install -Dm644 ${settingsItem}/share/applications/urldebloater-config.desktop $out/share/applications/urldebloater-config.desktop

@@ -10,7 +10,7 @@ let
   cfg = config.services.urldebloater-desktop;
 in
 {
-  imports = [ (import ./desktop-options.nix { inherit self; }) ];
+  imports = [ (import ./options.nix { inherit self; }) ];
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
