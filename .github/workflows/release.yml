@@ -20,7 +20,7 @@ jobs:
           - os: windows-latest
             formats: nsis
             artifact: windows
-          - os: macos-14
+          - os: macos-26
             formats: app,dmg
             artifact: macos
     runs-on: ${{ matrix.os }}
