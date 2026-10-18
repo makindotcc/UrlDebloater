@@ -2,10 +2,14 @@ package cc.makin.urldebloater.android
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.graphics.Color
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.annotation.StringRes
+import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.lifecycleScope
 import cc.makin.urldebloater.android.rust.UrlWasherInitException
 import cc.makin.urldebloater.android.settings.SettingsStore
@@ -21,7 +25,11 @@ class ClipboardWashActivity : ComponentActivity() {
     private var adapter: UrlWasherAdapter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        window.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
+        setContentView(View(this))
+        window.setLayout(1, 1)
         adapter = UrlWasherAdapter(File(filesDir, clearurlsCacheFile).absolutePath)
     }
 
