@@ -25,8 +25,6 @@ use urldebloater_urlwasher::{
 
 pub(crate) const CLIPBOARD_PAUSE_DURATION: Duration = Duration::from_secs(30);
 
-type WashTask = Pin<Box<dyn Future<Output = String> + Send>>;
-
 struct App {
     config: Config,
     clipboard_service: ClipboardService,
@@ -59,12 +57,16 @@ impl App {
         })
     }
 
+    fn clipboard_debloater_enabled(&self) -> bool {
+        self.config.clipboard_debloater
+    }
+
     async fn run(&mut self, mut app_command_rx: mpsc::Receiver<AppCommand>) {
         loop {
             select! {
                 Some(tray_command) = app_command_rx.recv()=> {
                     match tray_command {
-                        AppCommand::ClearClipboard => self.clear_clipboard(),
+                        AppCommand::ClearClipboard => self.clear_clipboard(WashMode::Manual),
                         AppCommand::ToggleClipboardDebloater => self.toggle_clipboard_debloater(),
                         AppCommand::ReloadConfig => self.reload_config().await,
                         AppCommand::OpenConfigGui => self.open_config_gui(),
@@ -81,7 +83,9 @@ impl App {
                             .map_or(true, |s| Instant::now() >= s.until)
                 => {
                     match result {
-                        Ok(()) if self.config.clipboard_debloater => self.clear_clipboard(),
+                        Ok(()) if self.config.clipboard_debloater => {
+                            self.clear_clipboard(WashMode::Automatic)
+                        }
                         Ok(()) => continue,
                         Err(err) => {
                             error!("Failed to poll clipboard: {err:#}");
@@ -92,7 +96,8 @@ impl App {
                 washed = async { self.wash_task.as_mut().unwrap().await },
                     if self.wash_task.is_some() => {
                         self.wash_task = None;
-                        if self.config.clipboard_debloater {
+                        let (washed, mode) = washed;
+                        if mode == WashMode::Manual || self.config.clipboard_debloater {
                             let current = self.clipboard_service.text();
                             if washed != *current {
                                 let _ = self.clipboard_service.set_text(Arc::from(washed));
@@ -108,7 +113,7 @@ impl App {
                         None => None,
                     }
                 } => {
-                    self.progress_clipboard_pause();
+                    self.publish_clipboard_status();
                 }
             };
         }
@@ -116,11 +121,11 @@ impl App {
         let _ = self.app_event_tx.send(AppEvent::Exit).await;
     }
 
-    fn clear_clipboard(&mut self) {
+    fn clear_clipboard(&mut self, mode: WashMode) {
         info!("Washing clipboard text...");
         let text = self.clipboard_service.text();
         let washer = Arc::clone(&self.text_washer);
-        self.wash_task = Some(Box::pin(async move { washer.wash(&text).await }));
+        self.wash_task = Some(Box::pin(async move { (washer.wash(&text).await, mode) }));
     }
 
     fn toggle_clipboard_debloater(&mut self) {
@@ -140,10 +145,10 @@ impl App {
                 });
             }
         }
-        self.progress_clipboard_pause();
+        self.publish_clipboard_status();
     }
 
-    fn progress_clipboard_pause(&mut self) {
+    fn publish_clipboard_status(&mut self) {
         let new_expires_at = match &self.clipboard_pause_state {
             Some(state) if state.until <= Instant::now() => {
                 self.clipboard_pause_state = None;
@@ -154,8 +159,9 @@ impl App {
         };
         let _ = self
             .app_event_tx
-            .try_send(AppEvent::ClipboardPauseProgressUpdate {
-                expires_at: new_expires_at,
+            .try_send(AppEvent::ClipboardStatusChanged {
+                clipboard_debloater_enabled: self.clipboard_debloater_enabled(),
+                pause_expires_at: new_expires_at,
             });
     }
 
@@ -181,6 +187,7 @@ impl App {
 
     async fn set_config(&mut self, config: Config) {
         self.config = config;
+        self.publish_clipboard_status();
         let catalog = self
             .text_washer
             .url_washer
@@ -199,9 +206,20 @@ pub enum AppCommand {
 }
 
 pub enum AppEvent {
-    ClipboardPauseProgressUpdate { expires_at: Option<Instant> },
+    ClipboardStatusChanged {
+        clipboard_debloater_enabled: bool,
+        pause_expires_at: Option<Instant>,
+    },
     Exit,
 }
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum WashMode {
+    Manual,
+    Automatic,
+}
+
+type WashTask = Pin<Box<dyn Future<Output = (String, WashMode)> + Send>>;
 
 async fn app_text_washer(
     config: &Config,
@@ -263,8 +281,10 @@ pub fn run() -> anyhow::Result<()> {
                     let mut app = App::new(app_event_tx)
                         .await
                         .context("initialize application")?;
+                    let clipboard_debloater_enabled = app.clipboard_debloater_enabled();
                     tokio::task::spawn(async move { app.run(app_command_rx).await });
-                    tray::platform::run(app_command_tx, app_event_rx).await
+                    tray::platform::run(app_command_tx, app_event_rx, clipboard_debloater_enabled)
+                        .await
                 });
                 if let Err(err) = result {
                     error!("Application worker encountered an error: {:?}", err);
@@ -277,6 +297,12 @@ pub fn run() -> anyhow::Result<()> {
 
     #[cfg(not(target_os = "linux"))]
     {
+        let clipboard_debloater_enabled = urldebloater_desktop_config::load_or_default()
+            .map(|config| config.clipboard_debloater)
+            .unwrap_or_else(|err| {
+                error!("Failed to load configuration for the tray icon: {err:#}");
+                Config::default().clipboard_debloater
+            });
         thread::Builder::new()
             .name("app-worker".into())
             .spawn(move || {
@@ -297,7 +323,8 @@ pub fn run() -> anyhow::Result<()> {
                 }
             })
             .context("spawn application worker")?;
-        tray::platform::run(app_command_tx, app_event_rx).context("run tray platform")?;
+        tray::platform::run(app_command_tx, app_event_rx, clipboard_debloater_enabled)
+            .context("run tray platform")?;
     }
 
     info!("Application workers started");

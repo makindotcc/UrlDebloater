@@ -5,6 +5,19 @@ const APP_NAME: &str = "UrlDebloater";
 const TRAY_ID: &str = "urldebloater";
 const TRAY_ICON_SIZE: u32 = 32;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ClipboardMenuVisibility {
+    debloat_clipboard: bool,
+    pause_clipboard_debloater: bool,
+}
+
+fn clipboard_menu_visibility(clipboard_debloater_enabled: bool) -> ClipboardMenuVisibility {
+    ClipboardMenuVisibility {
+        debloat_clipboard: !clipboard_debloater_enabled,
+        pause_clipboard_debloater: clipboard_debloater_enabled,
+    }
+}
+
 fn pause_clipboard_title(expires_at: Option<Instant>) -> String {
     match expires_at {
         Some(expires_at) => format!(
@@ -20,7 +33,9 @@ fn pause_clipboard_title(expires_at: Option<Instant>) -> String {
 
 #[cfg(target_os = "linux")]
 pub(crate) mod platform {
-    use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, pause_clipboard_title};
+    use super::{
+        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, clipboard_menu_visibility, pause_clipboard_title,
+    };
     use crate::app::{AppCommand, AppEvent};
     use anyhow::Context;
     use ksni::{
@@ -38,6 +53,7 @@ pub(crate) mod platform {
 
     struct DebloaterTray {
         command_tx: mpsc::Sender<AppCommand>,
+        clipboard_debloater_enabled: bool,
         pause_expires_at: Option<Instant>,
     }
 
@@ -76,15 +92,18 @@ pub(crate) mod platform {
         }
 
         fn menu(&self) -> Vec<MenuItem<Self>> {
+            let visibility = clipboard_menu_visibility(self.clipboard_debloater_enabled);
             vec![
                 StandardItem {
                     label: "Debloat clipboard".into(),
+                    visible: visibility.debloat_clipboard,
                     activate: Box::new(|tray: &mut Self| tray.send(AppCommand::ClearClipboard)),
                     ..Default::default()
                 }
                 .into(),
                 StandardItem {
                     label: pause_clipboard_title(self.pause_expires_at),
+                    visible: visibility.pause_clipboard_debloater,
                     activate: Box::new(|tray: &mut Self| {
                         tray.send(AppCommand::ToggleClipboardDebloater)
                     }),
@@ -123,9 +142,11 @@ pub(crate) mod platform {
     pub async fn run(
         command_tx: mpsc::Sender<AppCommand>,
         mut event_rx: mpsc::Receiver<AppEvent>,
+        clipboard_debloater_enabled: bool,
     ) -> anyhow::Result<()> {
         let tray = DebloaterTray {
             command_tx,
+            clipboard_debloater_enabled,
             pause_expires_at: None,
         };
         let handle = tray
@@ -137,9 +158,15 @@ pub(crate) mod platform {
 
         while let Some(event) = event_rx.recv().await {
             match event {
-                AppEvent::ClipboardPauseProgressUpdate { expires_at } => {
+                AppEvent::ClipboardStatusChanged {
+                    clipboard_debloater_enabled,
+                    pause_expires_at,
+                } => {
                     handle
-                        .update(|tray: &mut DebloaterTray| tray.pause_expires_at = expires_at)
+                        .update(|tray: &mut DebloaterTray| {
+                            tray.clipboard_debloater_enabled = clipboard_debloater_enabled;
+                            tray.pause_expires_at = pause_expires_at;
+                        })
                         .await;
                 }
                 AppEvent::Exit => break,
@@ -149,27 +176,78 @@ pub(crate) mod platform {
         handle.shutdown().await;
         Ok(())
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn menu_entries(clipboard_debloater_enabled: bool) -> Vec<(String, bool)> {
+            let (command_tx, _command_rx) = mpsc::channel(1);
+            let tray = DebloaterTray {
+                command_tx,
+                clipboard_debloater_enabled,
+                pause_expires_at: None,
+            };
+            tray.menu()
+                .into_iter()
+                .filter_map(|item| match item {
+                    MenuItem::Standard(item) => Some((item.label, item.visible)),
+                    _ => None,
+                })
+                .collect()
+        }
+
+        fn is_visible(entries: &[(String, bool)], label: &str) -> bool {
+            entries
+                .iter()
+                .any(|(entry_label, visible)| entry_label == label && *visible)
+        }
+
+        #[test]
+        fn clipboard_entries_follow_auto_debloater_state() {
+            let enabled = menu_entries(true);
+            assert!(!is_visible(&enabled, "Debloat clipboard"));
+            assert!(
+                enabled
+                    .iter()
+                    .any(|(label, visible)| *visible
+                        && label.starts_with("Pause clipboard debloater"))
+            );
+
+            let disabled = menu_entries(false);
+            assert!(is_visible(&disabled, "Debloat clipboard"));
+            assert!(
+                !disabled
+                    .iter()
+                    .any(|(label, visible)| *visible
+                        && label.starts_with("Pause clipboard debloater"))
+            );
+        }
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
 pub(crate) mod platform {
-    use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, pause_clipboard_title};
+    use super::{
+        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, clipboard_menu_visibility, pause_clipboard_title,
+    };
     use crate::app::{AppCommand, AppEvent};
     use anyhow::Context;
     use log::{debug, error};
+    use std::time::Instant;
     use tokio::sync::mpsc;
     use tray_icon::{
         Icon, TrayIcon, TrayIconBuilder, TrayIconEvent,
         menu::{Menu, MenuEvent, MenuItem},
     };
+    #[cfg(target_os = "macos")]
+    use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
     use winit::{
         application::ApplicationHandler,
         event::StartCause,
         event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
         window::WindowId,
     };
-    #[cfg(target_os = "macos")]
-    use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 
     const TRAY_ICON_RGBA: &[u8] = include_bytes!(concat!(
         env!("CARGO_WORKSPACE_DIR"),
@@ -179,11 +257,14 @@ pub(crate) mod platform {
     pub fn run(
         command_tx: mpsc::Sender<AppCommand>,
         mut event_rx: mpsc::Receiver<AppEvent>,
+        clipboard_debloater_enabled: bool,
     ) -> anyhow::Result<()> {
         let mut event_loop_builder = EventLoop::<UserEvent>::with_user_event();
         #[cfg(target_os = "macos")]
         event_loop_builder.with_activation_policy(ActivationPolicy::Accessory);
-        let event_loop = event_loop_builder.build().context("create tray event loop")?;
+        let event_loop = event_loop_builder
+            .build()
+            .context("create tray event loop")?;
         event_loop.set_control_flow(ControlFlow::Wait);
 
         install_tray_icon_forwarder(&event_loop);
@@ -219,7 +300,7 @@ pub(crate) mod platform {
             })
             .context("spawn tray event bridge")?;
 
-        let menu = new_menu(&menu_items)?;
+        let menu = new_menu(&menu_items, clipboard_debloater_enabled)?;
         let mut tray = TrayHandler {
             menu_items,
             menu: Some(menu),
@@ -249,16 +330,35 @@ pub(crate) mod platform {
         tray_icon: Option<TrayIcon>,
     }
 
+    impl TrayHandler {
+        fn apply_clipboard_status(
+            &mut self,
+            clipboard_debloater_enabled: bool,
+            pause_expires_at: Option<Instant>,
+        ) {
+            self.menu_items
+                .pause_clipboard_debloat
+                .set_text(pause_clipboard_title(pause_expires_at));
+            if let Some(menu) = &self.menu
+                && let Err(err) = self
+                    .menu_items
+                    .sync_clipboard_items(menu, clipboard_debloater_enabled)
+            {
+                error!("Failed to update tray menu: {err:#}");
+            }
+        }
+    }
+
     impl ApplicationHandler<UserEvent> for TrayHandler {
         fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: StartCause) {
             if !matches!(cause, StartCause::Init) {
                 return;
             }
 
-            let Some(menu) = self.menu.take() else {
+            let Some(menu) = &self.menu else {
                 return;
             };
-            match create_tray(menu) {
+            match create_tray(menu.clone()) {
                 Ok(tray_icon) => self.tray_icon = Some(tray_icon),
                 Err(err) => error!("Failed to initialize tray icon: {err:#}"),
             }
@@ -267,10 +367,11 @@ pub(crate) mod platform {
         fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
             match event {
                 UserEvent::TrayIcon(event) => debug!("Tray icon event: {event:?}"),
-                UserEvent::App(AppEvent::ClipboardPauseProgressUpdate { expires_at }) => {
-                    self.menu_items
-                        .pause_clipboard_debloat
-                        .set_text(pause_clipboard_title(expires_at));
+                UserEvent::App(AppEvent::ClipboardStatusChanged {
+                    clipboard_debloater_enabled,
+                    pause_expires_at,
+                }) => {
+                    self.apply_clipboard_status(clipboard_debloater_enabled, pause_expires_at);
                 }
                 UserEvent::App(AppEvent::Exit) => event_loop.exit(),
             }
@@ -311,6 +412,26 @@ pub(crate) mod platform {
             }
         }
 
+        fn sync_clipboard_items(
+            &self,
+            menu: &Menu,
+            clipboard_debloater_enabled: bool,
+        ) -> anyhow::Result<()> {
+            let visibility = clipboard_menu_visibility(clipboard_debloater_enabled);
+            sync_menu_item(
+                menu,
+                &self.debloat_clipboard,
+                visibility.debloat_clipboard,
+                0,
+            )?;
+            sync_menu_item(
+                menu,
+                &self.pause_clipboard_debloat,
+                visibility.pause_clipboard_debloater,
+                0,
+            )
+        }
+
         fn to_ids(&self) -> MenuItemIds {
             MenuItemIds {
                 debloat_clipboard: self.debloat_clipboard.id().0.clone(),
@@ -330,12 +451,11 @@ pub(crate) mod platform {
         exit: String,
     }
 
-    fn new_menu(menu_items: &MenuItems) -> anyhow::Result<Menu> {
+    fn new_menu(menu_items: &MenuItems, clipboard_debloater_enabled: bool) -> anyhow::Result<Menu> {
         let menu = Menu::new();
-        menu.append(&menu_items.debloat_clipboard)
-            .context("build tray item 'Debloat clipboard'")?;
-        menu.append(&menu_items.pause_clipboard_debloat)
-            .context("build tray item 'Debloat pause'")?;
+        menu_items
+            .sync_clipboard_items(&menu, clipboard_debloater_enabled)
+            .context("build clipboard tray items")?;
         menu.append(&menu_items.settings)
             .context("build tray item 'Settings'")?;
         menu.append(&menu_items.reload_config)
@@ -343,6 +463,20 @@ pub(crate) mod platform {
         menu.append(&menu_items.exit)
             .context("build tray item 'Exit'")?;
         Ok(menu)
+    }
+
+    fn sync_menu_item(
+        menu: &Menu,
+        item: &MenuItem,
+        visible: bool,
+        position: usize,
+    ) -> anyhow::Result<()> {
+        let present = menu.items().iter().any(|current| current.id() == item.id());
+        match (present, visible) {
+            (true, false) => menu.remove(item).context("remove tray menu item"),
+            (false, true) => menu.insert(item, position).context("insert tray menu item"),
+            _ => Ok(()),
+        }
     }
 
     fn create_tray(menu: Menu) -> anyhow::Result<TrayIcon> {
