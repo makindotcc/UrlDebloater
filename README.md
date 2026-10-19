@@ -7,8 +7,37 @@ Remove tracking params from URLs.
 ### Android
 [<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="80">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22cc.makin.urldebloater.android%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fmakindotcc%2FUrlDebloater%22%2C%22author%22%3A%22makindotcc%22%2C%22name%22%3A%22UrlDebloater%22%7D)
 
-### Other platforms
-TODO
+### NixOS / nix-darwin
+flake.nix
+```nix
+{
+  inputs = {
+    # [...]
+    urldebloater = {
+      url = "github:makindotcc/urldebloater";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+  # [...]
+}
+```
+module
+```nix
+{ inputs, ... }:
+{
+  imports = [
+    # NixOS
+    inputs.urldebloater.nixosModules.desktop
+    # Or nix-darwin: inputs.urldebloater.darwinModules.desktop
+  ];
+
+  services.urldebloater-desktop = {
+    enable = true;
+    autostart = true; # default
+    configGui = true; # default
+  };
+}
+```
 
 ## Supported websites
 - Youtube & Youtube music (clears url query params)
