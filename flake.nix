@@ -1,12 +1,19 @@
 {
   description = "UrlDebloater packages and development shell";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
   outputs =
     {
       self,
       nixpkgs,
+      rust-overlay,
     }:
     let
       inherit (nixpkgs) lib;
@@ -40,6 +47,19 @@
       };
 
       pkgsFor = system: import nixpkgs { inherit system; };
+
+      devPkgsFor = system: import nixpkgs {
+        inherit system;
+        overlays = [ (import rust-overlay) ];
+        config.allowUnfreePredicate =
+          pkg:
+          builtins.elem (lib.getName pkg) [
+            "android-sdk-ndk"
+            "android-sdk-platform-tools"
+            "ndk"
+            "platform-tools"
+          ];
+      };
 
       desktopFor =
         pkgs:
@@ -95,7 +115,7 @@
 
       devShells = forAllSystems (system: {
         default = import ./nix/dev-shell.nix {
-          pkgs = pkgsFor system;
+          pkgs = devPkgsFor system;
         };
       });
 

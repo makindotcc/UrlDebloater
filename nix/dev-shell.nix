@@ -4,6 +4,25 @@ let
   inherit (pkgs) lib;
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
 
+  rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+    extensions = [
+      "rust-analyzer"
+      "rust-src"
+    ];
+    targets = [
+      "aarch64-linux-android"
+      "x86_64-linux-android"
+    ];
+  };
+
+  androidNdk = pkgs.androidenv.composeAndroidPackages {
+    includeNDK = true;
+    ndkVersions = [ "27.3.13750724" ];
+    includeEmulator = false;
+    includeSystemImages = false;
+  };
+  androidNdkHome = "${androidNdk.ndk-bundle}/libexec/android-sdk/ndk-bundle";
+
   linuxGuiLibraries = [
     pkgs.atk
     pkgs.cairo
@@ -30,20 +49,27 @@ let
 in
 pkgs.mkShell {
   nativeBuildInputs = [
-    pkgs.cargo
+    rustToolchain
     pkgs.cmake
+    pkgs.jdk21
+    pkgs.ktlint
     pkgs.pkg-config
-    pkgs.rust-analyzer
-    pkgs.rustc
-    pkgs.rustPlatform.rustLibSrc
     pkgs.zola
-  ] ++ lib.optionals isLinux [ pkgs.wild ];
+  ]
+  ++ lib.optionals isLinux [
+    pkgs.cargo-ndk
+    pkgs.wild
+  ];
 
-  buildInputs = lib.optionals isLinux linuxGuiLibraries ++ lib.optionals (!isLinux) [ pkgs.apple-sdk_26 ];
+  buildInputs =
+    lib.optionals isLinux linuxGuiLibraries ++ lib.optionals (!isLinux) [ pkgs.apple-sdk_26 ];
 
   env = {
-    RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
-  } // lib.optionalAttrs isLinux {
+    RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+  }
+  // lib.optionalAttrs isLinux {
+    ANDROID_NDK_HOME = androidNdkHome;
+    ANDROID_NDK_ROOT = androidNdkHome;
     LD_LIBRARY_PATH = lib.makeLibraryPath linuxGuiLibraries;
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS = "-C link-arg=-fuse-ld=wild";
   };
