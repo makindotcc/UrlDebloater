@@ -13,6 +13,9 @@ use std::future::Future;
 use std::sync::OnceLock;
 use url::{form_urlencoded, Url};
 
+/// Fork of ClearURLs rules, because it looks like the original repository is no longer actively maintained.
+const RULES_URL: &str = "https://raw.githubusercontent.com/makindotcc/UrlDebloater/refs/heads/master/assets/cleanurls_rules.json";
+
 #[derive(Debug)]
 pub struct ClearUrls {
     catalog: DataCatalog,
@@ -70,7 +73,7 @@ pub struct ReqwestCatalogLoader;
 impl CatalogLoader for ReqwestCatalogLoader {
     fn load_catalog(&self) -> impl Future<Output = anyhow::Result<DataCatalog>> {
         async {
-            let response = reqwest::get("https://rules2.clearurls.xyz/data.minify.json")
+            let response = reqwest::get(RULES_URL)
                 .await
                 .context("get clearurls data")?;
             ensure!(
