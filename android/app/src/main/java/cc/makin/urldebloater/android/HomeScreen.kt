@@ -40,7 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import cc.makin.urldebloater.android.rust.UrlWasherInitException
 import cc.makin.urldebloater.android.settings.AppSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -70,7 +69,7 @@ private enum class HomeAction {
 @Composable
 fun HomeScreen(
     settings: AppSettings,
-    urlWasherAdapter: UrlWasherAdapter,
+    wash: suspend (String, AppSettings) -> WashOutcome,
     modifier: Modifier = Modifier,
 ) {
     var input by rememberSaveable { mutableStateOf("") }
@@ -96,7 +95,15 @@ fun HomeScreen(
             try {
                 when (action) {
                     HomeAction.CLEAN -> {
-                        input = urlWasherAdapter.wash(input, settings)
+                        when (val outcome = wash(input, settings)) {
+                            is WashOutcome.Cleaned -> input = outcome.text
+                            WashOutcome.InvalidMixerUrl -> {
+                                errorRes = R.string.settings_mixer_url_invalid
+                            }
+                            WashOutcome.Failed -> {
+                                errorRes = R.string.home_wash_error
+                            }
+                        }
                     }
 
                     HomeAction.CLEAN_CLIPBOARD -> {
@@ -112,18 +119,25 @@ fun HomeScreen(
                         if (clipText.isNullOrBlank()) {
                             errorRes = R.string.home_clipboard_empty_error
                         } else {
-                            val cleaned = urlWasherAdapter.wash(clipText, settings)
-                            clipboard.setClipEntry(
-                                ClipEntry(ClipData.newPlainText(clipLabel, cleaned))
-                            )
-                            clipboardCleaned = true
+                            when (val outcome = wash(clipText, settings)) {
+                                is WashOutcome.Cleaned -> {
+                                    clipboard.setClipEntry(
+                                        ClipEntry(ClipData.newPlainText(clipLabel, outcome.text))
+                                    )
+                                    clipboardCleaned = true
+                                }
+                                WashOutcome.InvalidMixerUrl -> {
+                                    errorRes = R.string.settings_mixer_url_invalid
+                                }
+                                WashOutcome.Failed -> {
+                                    errorRes = R.string.home_clipboard_error
+                                }
+                            }
                         }
                     }
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
-            } catch (_: UrlWasherInitException) {
-                errorRes = R.string.settings_mixer_url_invalid
             } catch (_: Exception) {
                 errorRes = if (action == HomeAction.CLEAN_CLIPBOARD) {
                     R.string.home_clipboard_error

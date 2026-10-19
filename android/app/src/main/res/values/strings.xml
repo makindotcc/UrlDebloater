@@ -21,6 +21,8 @@
     <string name="home_link_open_error">No app can open this link</string>
     <string name="settings_add_open_shortcut_summary">Cleans the clipboard and opens its link</string>
     <string name="home_clipboard_cleaned_message">Clipboard cleaned</string>
+    <string name="wash_progress_title">Cleaning clipboard</string>
+    <string name="wash_progress_text">Resolving redirects…</string>
     <string name="settings_section_general">General</string>
     <string name="settings_section_redirects">Redirects</string>
     <string name="settings_section_custom_domains">Custom domains</string>

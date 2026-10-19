@@ -14,24 +14,18 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.lifecycle.lifecycleScope
-import cc.makin.urldebloater.android.rust.UrlWasherInitException
 import cc.makin.urldebloater.android.settings.SettingsStore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import java.io.File
 
-private const val clearurlsCacheFile = "clearurls-cache.json"
 private const val progressWindowSizeDp = 56
 private const val progressIndicatorSizeDp = 28
 private const val progressCornerRadiusDp = 16
 
 class TextWashActivity : ComponentActivity() {
     private var finished = false
-    private var adapter: UrlWasherAdapter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        adapter = UrlWasherAdapter(File(filesDir, clearurlsCacheFile).absolutePath)
         setContentView(progressView())
         window.setLayout(dp(progressWindowSizeDp), dp(progressWindowSizeDp))
         window.setGravity(Gravity.CENTER)
@@ -49,27 +43,25 @@ class TextWashActivity : ComponentActivity() {
         }
 
         val settings = SettingsStore(this).load()
-        val washer = checkNotNull(adapter)
+        val app = application as UrlDebloaterApplication
         lifecycleScope.launch {
-            val cleaned = try {
-                washer.wash(raw, settings)
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: UrlWasherInitException) {
-                finishWithMessage(R.string.settings_mixer_url_invalid, processText)
-                return@launch
-            } catch (_: Exception) {
-                finishWithMessage(R.string.home_wash_error, processText)
-                return@launch
+            val cleaned = when (val outcome = app.washOutcome(raw, settings)) {
+                is WashOutcome.Cleaned -> outcome.text
+                WashOutcome.InvalidMixerUrl -> {
+                    finishWithMessage(R.string.settings_mixer_url_invalid, processText)
+                    return@launch
+                }
+                WashOutcome.Failed -> {
+                    finishWithMessage(R.string.home_wash_error, processText)
+                    return@launch
+                }
             }
+            copyToClipboard(cleaned)
             if (processText) {
                 setResult(
                     RESULT_OK,
                     Intent().putExtra(Intent.EXTRA_PROCESS_TEXT, cleaned),
                 )
-            } else {
-                getSystemService(ClipboardManager::class.java)
-                    .setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), cleaned))
             }
             Toast.makeText(
                 this@TextWashActivity,
@@ -79,6 +71,11 @@ class TextWashActivity : ComponentActivity() {
             finished = true
             finish()
         }
+    }
+
+    private fun copyToClipboard(text: String) {
+        getSystemService(ClipboardManager::class.java)
+            .setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
     }
 
     private fun finishWithMessage(@StringRes messageRes: Int, processText: Boolean) {
@@ -108,10 +105,4 @@ class TextWashActivity : ComponentActivity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
-
-    override fun onDestroy() {
-        adapter?.close()
-        adapter = null
-        super.onDestroy()
-    }
 }

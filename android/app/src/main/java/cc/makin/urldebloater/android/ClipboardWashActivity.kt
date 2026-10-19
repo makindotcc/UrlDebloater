@@ -1,6 +1,5 @@
 package cc.makin.urldebloater.android
 
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.graphics.Color
 import android.os.Bundle
@@ -9,20 +8,19 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.StringRes
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toDrawable
 import androidx.lifecycle.lifecycleScope
-import cc.makin.urldebloater.android.rust.UrlWasherInitException
 import cc.makin.urldebloater.android.settings.SettingsStore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import java.io.File
 
-private const val clearurlsCacheFile = "clearurls-cache.json"
 private const val clipboardTextMimeType = "text/*"
 
 open class ClipboardWashActivity : ComponentActivity() {
     private var started = false
-    private var adapter: UrlWasherAdapter? = null
+
+    protected open val finishBeforeWash: Boolean
+        get() = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -30,7 +28,6 @@ open class ClipboardWashActivity : ComponentActivity() {
         window.setBackgroundDrawable(Color.TRANSPARENT.toDrawable())
         setContentView(View(this))
         window.setLayout(1, 1)
-        adapter = UrlWasherAdapter(File(filesDir, clearurlsCacheFile).absolutePath)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -59,22 +56,18 @@ open class ClipboardWashActivity : ComponentActivity() {
             return
         }
 
+        if (finishBeforeWash) {
+            ContextCompat.startForegroundService(this, ClipboardWashService.intent(this, text))
+            finish()
+            return
+        }
+
         val settings = SettingsStore(this).load()
-        val washer = checkNotNull(adapter)
+        val app = application as UrlDebloaterApplication
         lifecycleScope.launch {
-            val cleaned = try {
-                washer.wash(text, settings).also { washed ->
-                    clipboard.setPrimaryClip(
-                        ClipData.newPlainText(getString(R.string.app_name), washed)
-                    )
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (_: UrlWasherInitException) {
-                toastAndFinish(R.string.settings_mixer_url_invalid)
-                return@launch
-            } catch (_: Exception) {
-                toastAndFinish(R.string.home_clipboard_error)
+            val cleaned = app.washClipboard(this@ClipboardWashActivity, text, settings)
+            if (cleaned == null) {
+                finish()
                 return@launch
             }
             onCleaned(cleaned)
@@ -89,11 +82,5 @@ open class ClipboardWashActivity : ComponentActivity() {
     protected fun toastAndFinish(@StringRes messageRes: Int) {
         Toast.makeText(this, messageRes, Toast.LENGTH_SHORT).show()
         finish()
-    }
-
-    override fun onDestroy() {
-        adapter?.close()
-        adapter = null
-        super.onDestroy()
     }
 }

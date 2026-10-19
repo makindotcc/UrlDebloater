@@ -33,6 +33,9 @@ private val linkIconSpacing = 12.dp
 private val linkRowPadding = 12.dp
 
 class ClipboardOpenActivity : ClipboardWashActivity() {
+    override val finishBeforeWash: Boolean
+        get() = false
+
     override fun onCleaned(cleaned: String) {
         val links = extractLinks(cleaned)
         when (links.size) {

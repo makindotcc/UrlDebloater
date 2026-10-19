@@ -1,10 +1,12 @@
 #[cfg(feature = "native")]
 use anyhow::{anyhow, Context};
 #[cfg(feature = "native")]
+use log::trace;
+#[cfg(feature = "native")]
 use reqwest::header;
 use std::future::Future;
 #[cfg(feature = "native")]
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use url::Url;
 
 pub trait RedirectResolver: Send + Sync {
@@ -60,12 +62,19 @@ impl Default for WithoutMixerRedirectResolver {
 impl RedirectResolver for WithoutMixerRedirectResolver {
     fn resolve(&self, url: Url) -> impl Future<Output = anyhow::Result<Url>> + Send {
         async move {
+            let started = Instant::now();
+            trace!("redirect(local): GET {url}");
             let resp = self
                 .client
                 .get(url)
                 .send()
                 .await
                 .context("send local redirect request")?;
+            trace!(
+                "redirect(local): status {} in {:?}",
+                resp.status(),
+                started.elapsed()
+            );
             let location = resp
                 .headers()
                 .get(header::LOCATION)
@@ -112,17 +121,26 @@ impl RedirectResolver for WithMixerRedirectResolver {
             let mut wash_url = self.mixer_instance.clone();
             wash_url.set_path("wash");
             wash_url.query_pairs_mut().append_pair("url", url.as_str());
+            let started = Instant::now();
+            trace!("redirect(mixer): GET {wash_url}");
             let resp = self
                 .client
                 .get(wash_url)
                 .send()
                 .await
                 .context("send mixer request")?;
+            trace!(
+                "redirect(mixer): status {} in {:?}",
+                resp.status(),
+                started.elapsed()
+            );
             if !resp.status().is_success() {
                 return Err(anyhow!("Invalid mixer response status: {}", resp.status()));
             }
-            Url::parse(&resp.text().await.context("read mixer response url")?)
-                .context("parse mixer response url")
+            let body_started = Instant::now();
+            let body = resp.text().await.context("read mixer response url")?;
+            trace!("redirect(mixer): body in {:?}", body_started.elapsed());
+            Url::parse(&body).context("parse mixer response url")
         }
     }
 }

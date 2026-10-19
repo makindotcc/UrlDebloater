@@ -19,6 +19,8 @@
     <string name="home_link_open_error">Brak aplikacji do otwarcia linku</string>
     <string name="settings_add_open_shortcut_summary">Czyści schowek i otwiera link</string>
     <string name="home_clipboard_cleaned_message">Oczyszczono schowek</string>
+    <string name="wash_progress_title">Czyszczę schowek</string>
+    <string name="wash_progress_text">Rozwiązuję przekierowania…</string>
     <string name="settings_section_general">Ogólne</string>
     <string name="settings_section_redirects">Przekierowania</string>
     <string name="settings_section_custom_domains">Własne domeny</string>

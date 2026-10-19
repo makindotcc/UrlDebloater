@@ -9,4 +9,7 @@ object NativeBridge {
 
     @JvmStatic
     external fun initTls(context: Context)
+
+    @JvmStatic
+    external fun initLogger(trace: Boolean)
 }

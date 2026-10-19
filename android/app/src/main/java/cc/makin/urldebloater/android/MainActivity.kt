@@ -23,7 +23,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,10 +34,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import cc.makin.urldebloater.android.settings.AppSettings
 import cc.makin.urldebloater.android.settings.SettingsScreen
 import cc.makin.urldebloater.android.settings.SettingsStore
 import cc.makin.urldebloater.android.ui.theme.UrlDebloaterTheme
-import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,10 +48,13 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
+        val app = application as UrlDebloaterApplication
         setContent {
             UrlDebloaterTheme {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    UrlDebloaterApp()
+                    UrlDebloaterApp(
+                        wash = { text, settings -> app.washOutcome(text, settings) },
+                    )
                     Spacer(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -68,20 +70,16 @@ class MainActivity : ComponentActivity() {
 
 @PreviewScreenSizes
 @Composable
-fun UrlDebloaterApp() {
+private fun UrlDebloaterAppPreview() {
+    UrlDebloaterApp(wash = { text, _ -> WashOutcome.Cleaned(text) })
+}
+
+@Composable
+fun UrlDebloaterApp(wash: suspend (String, AppSettings) -> WashOutcome) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
     val context = LocalContext.current
     val settingsStore = remember { SettingsStore(context.applicationContext) }
     var settings by remember { mutableStateOf(settingsStore.load()) }
-    val urlWasherAdapter = remember {
-        UrlWasherAdapter(File(context.filesDir, "clearurls-cache.json").absolutePath)
-    }
-
-    DisposableEffect(urlWasherAdapter) {
-        onDispose {
-            urlWasherAdapter.close()
-        }
-    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -104,7 +102,7 @@ fun UrlDebloaterApp() {
             when (currentDestination) {
                 AppDestinations.HOME -> HomeScreen(
                     settings = settings,
-                    urlWasherAdapter = urlWasherAdapter,
+                    wash = wash,
                     modifier = Modifier.padding(innerPadding),
                 )
 

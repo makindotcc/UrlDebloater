@@ -20,5 +20,7 @@ urldebloater-urlwasher = { workspace = true, features = ["uniffi"] }
 uniffi = { version = "0.32.2", optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.15"
+log.workspace = true
 jni = "0.22"
 rustls-platform-verifier = "0.7"
