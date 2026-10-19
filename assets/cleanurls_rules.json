@@ -647,7 +647,7 @@
     },
     "instagram": {
       "urlPattern": "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?instagram\\.com",
-      "rules": ["igshid", "igsh"],
+      "rules": ["igshid", "igsh", "exln", "mdxt", "obrf"],
       "redirections": [".*u=([^&]*)"]
     },
     "imgsrc.ru": {
