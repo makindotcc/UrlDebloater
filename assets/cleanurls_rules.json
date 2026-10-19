@@ -298,7 +298,7 @@
     },
     "youtube": {
       "urlPattern": "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?(youtube\\.com|youtu\\.be)",
-      "rules": ["feature", "gclid", "kw", "si", "pp"],
+      "rules": ["feature", "gclid", "kw", "si", "is", "pp"],
       "exceptions": [
         "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?youtube\\.com\\/signin\\?.*?"
       ],
