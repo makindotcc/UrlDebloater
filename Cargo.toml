@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 
 [workspace.dependencies]
 urldebloater-desktop-config = { path = "crates/desktop-config" }
@@ -21,7 +21,13 @@ regex = "1.11"
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 
 env_logger = "0.11"
-tokio = { version = "1.52", features = ["macros", "rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.52", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+] }
 
 axum = "0.7"
 axum-macros = "0.4"
@@ -32,7 +38,9 @@ tower_governor = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
+arboard = { version = "3.6", default-features = false, features = [
+    "wayland-data-control",
+] }
 notify = "8.2"
 mitsuami = "1.1"
 
