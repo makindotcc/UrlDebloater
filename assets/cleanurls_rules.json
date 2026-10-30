@@ -359,7 +359,7 @@
     },
     "twitter": {
       "urlPattern": "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?twitter.com",
-      "rules": ["(?:ref_?)?src", "s", "cn", "ref_url", "t"],
+      "rules": ["(?:ref_?)?src", "s", "cn", "ref_url", "t", "a"],
       "exceptions": ["^https?:\\/\\/twitter.com\\/i\\/redirect"]
     },
     "x": {
