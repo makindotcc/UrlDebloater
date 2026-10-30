@@ -231,8 +231,12 @@ pub(crate) mod tests {
                 "https://youtu.be/lSwnPoo9ZK0?t=65",
             ),
             (
-                "https://music.youtube.com/watch?v=lSwnPoo9ZK0&si=ETK0gAaXYGNy2aJ6",
+                "https://music.youtube.com/watch?v=lSwnPoo9ZK0&SI=ETK0gAaXYGNy2aJ6",
                 "https://music.youtube.com/watch?v=lSwnPoo9ZK0",
+            ),
+            (
+                "https://www.youtube.com/watch?v=I2W4FepDhyw&list=PLrHjf8BKFvfq1kO8bhqJxfACy0O3kyMu7&index=2",
+                "https://www.youtube.com/watch?v=I2W4FepDhyw&list=PLrHjf8BKFvfq1kO8bhqJxfACy0O3kyMu7&index=2",
             ),
             (
                 "https://x.com/sekurak/status/1737942071431073818?s=46&t=eLM_fuufufjf",

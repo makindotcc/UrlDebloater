@@ -331,10 +331,23 @@ fn compile_rules(provider: &Provider) -> anyhow::Result<CompiledRules> {
             .collect()
     }
 
+    fn compile_query_rules(patterns: &[String]) -> anyhow::Result<Vec<Regex>> {
+        patterns
+            .iter()
+            .map(|pattern| {
+                let pattern = format!("^{pattern}$");
+                regex::RegexBuilder::new(&pattern)
+                    .case_insensitive(true)
+                    .build()
+                    .with_context(|| format!("invalid pattern '{pattern}'"))
+            })
+            .collect()
+    }
+
     Ok(CompiledRules {
-        rules: compile_all(&provider.rules)?,
+        rules: compile_query_rules(&provider.rules)?,
         raw_rules: compile_all(&provider.raw_rules)?,
-        referral_marketing: compile_all(&provider.referral_marketing)?,
+        referral_marketing: compile_query_rules(&provider.referral_marketing)?,
         exceptions: compile_all(&provider.exceptions)?,
         redirections: compile_all(&provider.redirections)?,
     })
@@ -374,7 +387,10 @@ mod tests {
         );
         assert!(!amazon.complete_provider);
         let amazon_rules = amazon.rules().unwrap();
-        assert!(amazon_rules.rules.iter().any(|rule| rule.as_str() == "qid"));
+        assert!(amazon_rules
+            .rules
+            .iter()
+            .any(|rule| rule.as_str() == "^qid$"));
         assert!(amazon_rules
             .raw_rules
             .iter()
@@ -382,7 +398,7 @@ mod tests {
         assert!(amazon_rules
             .referral_marketing
             .iter()
-            .any(|rule| rule.as_str() == "tag"));
+            .any(|rule| rule.as_str() == "^tag$"));
         assert!(!amazon.force_redirection);
 
         let blocked_provider = catalog.provider("fls-na.amazon").unwrap();
