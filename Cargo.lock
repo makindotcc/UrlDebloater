@@ -4938,7 +4938,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-android"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "android_logger",
  "jni",
@@ -4950,7 +4950,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-desktop-config"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "log",
@@ -4962,7 +4962,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-desktop-config-gui"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -4976,7 +4976,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-desktop-daemon"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5002,7 +5002,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-mixer"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "axum",
@@ -5022,7 +5022,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-urlwasher"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "log",
@@ -5040,7 +5040,7 @@ dependencies = [
 
 [[package]]
 name = "urldebloater-urlwasher-wasm"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "futures-channel",
