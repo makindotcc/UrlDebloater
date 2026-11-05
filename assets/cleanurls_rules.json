@@ -364,7 +364,7 @@
     },
     "x": {
       "urlPattern": "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?x.com",
-      "rules": ["(?:ref_?)?src", "s", "cn", "ref_url", "t"],
+      "rules": ["(?:ref_?)?src", "s", "cn", "ref_url", "t", "a"],
       "exceptions": ["^https?:\\/\\/x.com\\/i\\/redirect"]
     },
     "reddit": {
