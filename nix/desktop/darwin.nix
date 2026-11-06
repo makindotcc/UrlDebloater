@@ -15,7 +15,7 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
-    launchd.agents = lib.mkIf cfg.autostart {
+    launchd.user.agents = lib.mkIf cfg.autostart {
       urldebloater = {
         command = "${cfg.package}/bin/urldebloater-desktop-daemon";
         serviceConfig = {
