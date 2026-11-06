@@ -70,11 +70,15 @@ pkgs.rustPlatform.buildRustPackage {
     pkgs.libicns
   ];
 
-  buildInputs = lib.optionals isLinux [
-    pkgs.gtk4
-    pkgs.libadwaita
-    pkgs.wayland
-  ];
+  buildInputs =
+    lib.optionals isLinux [
+      pkgs.gtk4
+      pkgs.libadwaita
+      pkgs.wayland
+    ]
+    ++ lib.optionals isDarwin [
+      pkgs.apple-sdk_26
+    ];
 
   preFixup = lib.optionalString isLinux ''
     gappsWrapperArgs+=(--prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ pkgs.wayland ]}")
