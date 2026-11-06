@@ -354,7 +354,7 @@ pub(crate) mod platform {
                         visible: entry.visible,
                         enabled: entry.enabled,
                         activate: Box::new(move |tray: &mut Self| match tray_entry {
-                            TrayEntry::Action(_) => {
+                            TrayEntry::Action(action) => {
                                 action.send(&tray.command_tx);
                             }
                             TrayEntry::Version => {}
