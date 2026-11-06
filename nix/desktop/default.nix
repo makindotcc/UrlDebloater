@@ -8,8 +8,27 @@
 let
   inherit (pkgs) lib;
   isLinux = pkgs.stdenv.hostPlatform.isLinux;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
 
   version = (lib.importTOML ../../Cargo.toml).workspace.package.version;
+
+  infoPlist = lib.generators.toPlist { escape = true; } {
+    CFBundleDevelopmentRegion = "en";
+    CFBundleDisplayName = "UrlDebloater";
+    CFBundleExecutable = "urldebloater-desktop-daemon";
+    CFBundleIconFile = "AppIcon";
+    CFBundleIconName = "AppIcon";
+    CFBundleIdentifier = "com.urldebloater.desktop";
+    CFBundleInfoDictionaryVersion = "6.0";
+    CFBundleName = "UrlDebloater";
+    CFBundlePackageType = "APPL";
+    CFBundleShortVersionString = version;
+    CFBundleVersion = version;
+    LSApplicationCategoryType = "public.app-category.utilities";
+    LSMinimumSystemVersion = "11.0";
+    LSUIElement = true;
+    NSHighResolutionCapable = true;
+  };
 
   appItem = pkgs.makeDesktopItem {
     name = "urldebloater";
@@ -45,7 +64,11 @@ pkgs.rustPlatform.buildRustPackage {
   nativeBuildInputs = [
     pkgs.pkg-config
   ]
-  ++ lib.optional isLinux pkgs.wrapGAppsHook4;
+  ++ lib.optional isLinux pkgs.wrapGAppsHook4
+  ++ lib.optionals isDarwin [
+    pkgs.imagemagick
+    pkgs.libicns
+  ];
 
   buildInputs = lib.optionals isLinux [
     pkgs.gtk4
@@ -70,8 +93,30 @@ pkgs.rustPlatform.buildRustPackage {
     install -Dm644 ${../../assets/icon/tray.png} $out/share/icons/hicolor/256x256/apps/urldebloater.png
     install -Dm644 ${appItem}/share/applications/urldebloater.desktop $out/share/applications/urldebloater.desktop
   ''
+  + lib.optionalString isDarwin ''
+    appBundle="$out/Applications/UrlDebloater.app"
+    mkdir -p "$appBundle/Contents/"{MacOS,Resources}
+
+    printf '%s' ${lib.escapeShellArg infoPlist} > "$appBundle/Contents/Info.plist"
+    printf 'APPL????' > "$appBundle/Contents/PkgInfo"
+    iconDir="$(mktemp -d)"
+    magick ${../../assets/icon/tray.png} -filter triangle -resize 1024x1024 "$iconDir/AppIcon.png"
+    png2icns "$appBundle/Contents/Resources/AppIcon.icns" "$iconDir/AppIcon.png"
+    rm -rf "$iconDir"
+
+    mv "$out/bin/urldebloater-desktop-daemon" "$appBundle/Contents/MacOS/"
+    ln -s "$appBundle/Contents/MacOS/urldebloater-desktop-daemon" "$out/bin/urldebloater-desktop-daemon"
+    ${lib.optionalString configGui ''
+      mv "$out/bin/urldebloater-desktop-config-gui" "$appBundle/Contents/MacOS/"
+      ln -s "$appBundle/Contents/MacOS/urldebloater-desktop-config-gui" "$out/bin/urldebloater-desktop-config-gui"
+    ''}
+  ''
   + ''
     runHook postInstall
+  '';
+
+  postFixup = lib.optionalString isDarwin ''
+    /usr/bin/codesign --force --deep --sign - "$out/Applications/UrlDebloater.app"
   '';
 
   meta = {

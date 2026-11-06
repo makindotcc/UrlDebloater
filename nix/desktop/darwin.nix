@@ -17,7 +17,7 @@ in
 
     launchd.user.agents = lib.mkIf cfg.autostart {
       urldebloater = {
-        command = "${cfg.package}/bin/urldebloater-desktop-daemon";
+        command = "${cfg.package}/Applications/UrlDebloater.app/Contents/MacOS/urldebloater-desktop-daemon";
         serviceConfig = {
           Label = "com.urldebloater.desktop";
           RunAtLoad = true;
