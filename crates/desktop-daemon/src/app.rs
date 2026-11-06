@@ -1,7 +1,6 @@
 use crate::update::{UpdateCommand, UpdateManager, UpdateStatus};
 use crate::{clipboard::ClipboardService, config_integration, tray};
 use anyhow::Context;
-use anyhow::anyhow;
 use arboard::Clipboard;
 use log::{error, info};
 use std::{
@@ -319,7 +318,7 @@ pub fn run() -> anyhow::Result<()> {
             })
             .context("spawn application worker")?
             .join()
-            .map_err(|err| anyhow!("Run application worker thread: {err:?}"))?;
+            .map_err(|err| anyhow::anyhow!("Run application worker thread: {err:?}"))?;
     }
 
     #[cfg(not(target_os = "linux"))]
