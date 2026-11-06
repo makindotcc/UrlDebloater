@@ -81,14 +81,21 @@ enum TrayAction {
     Exit,
 }
 
-const MENU_ACTIONS: &[TrayAction] = &[
-    TrayAction::DebloatClipboard,
-    TrayAction::PauseClipboardDebloater,
-    TrayAction::InstallUpdate,
-    TrayAction::CheckForUpdates,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TrayEntry {
+    Action(TrayAction),
+    Version,
+}
+
+const MENU_ENTRIES: &[TrayEntry] = &[
+    TrayEntry::Action(TrayAction::DebloatClipboard),
+    TrayEntry::Action(TrayAction::PauseClipboardDebloater),
+    TrayEntry::Action(TrayAction::InstallUpdate),
+    TrayEntry::Action(TrayAction::CheckForUpdates),
     #[cfg(feature = "config-gui-integration")]
-    TrayAction::OpenConfigGui,
-    TrayAction::Exit,
+    TrayEntry::Action(TrayAction::OpenConfigGui),
+    TrayEntry::Action(TrayAction::Exit),
+    TrayEntry::Version,
 ];
 
 impl TrayAction {
@@ -109,7 +116,7 @@ impl TrayAction {
 }
 
 struct MenuEntry {
-    action: TrayAction,
+    entry: TrayEntry,
     label: Cow<'static, str>,
     visible: bool,
     enabled: bool,
@@ -175,40 +182,47 @@ impl TrayState {
     }
 
     fn menu_entries(&self) -> impl Iterator<Item = MenuEntry> + '_ {
-        MENU_ACTIONS
+        MENU_ENTRIES
             .iter()
             .copied()
-            .map(|action| self.menu_entry(action))
+            .map(|entry| self.menu_entry(entry))
     }
 
-    fn menu_entry(&self, action: TrayAction) -> MenuEntry {
-        let (label, visible, enabled) = match action {
-            TrayAction::DebloatClipboard => (
-                Cow::Borrowed("Debloat clipboard"),
-                !self.clipboard_debloater_enabled,
+    fn menu_entry(&self, entry: TrayEntry) -> MenuEntry {
+        let (label, visible, enabled) = match entry {
+            TrayEntry::Action(action) => match action {
+                TrayAction::DebloatClipboard => (
+                    Cow::Borrowed("Debloat clipboard"),
+                    !self.clipboard_debloater_enabled,
+                    true,
+                ),
+                TrayAction::PauseClipboardDebloater => (
+                    Cow::Owned(pause_clipboard_title(self.pause_expires_at)),
+                    self.clipboard_debloater_enabled,
+                    true,
+                ),
+                TrayAction::InstallUpdate => (
+                    update_label(&self.update_status),
+                    update_visible(&self.update_status),
+                    update_enabled(&self.update_status),
+                ),
+                TrayAction::CheckForUpdates => (
+                    Cow::Borrowed(check_label(&self.update_status)),
+                    true,
+                    check_enabled(&self.update_status),
+                ),
+                #[cfg(feature = "config-gui-integration")]
+                TrayAction::OpenConfigGui => (Cow::Borrowed("Settings"), true, true),
+                TrayAction::Exit => (Cow::Borrowed("Exit"), true, true),
+            },
+            TrayEntry::Version => (
+                Cow::Borrowed(concat!("UrlDebloater v", env!("CARGO_PKG_VERSION"))),
                 true,
+                false,
             ),
-            TrayAction::PauseClipboardDebloater => (
-                Cow::Owned(pause_clipboard_title(self.pause_expires_at)),
-                self.clipboard_debloater_enabled,
-                true,
-            ),
-            TrayAction::InstallUpdate => (
-                update_label(&self.update_status),
-                update_visible(&self.update_status),
-                update_enabled(&self.update_status),
-            ),
-            TrayAction::CheckForUpdates => (
-                Cow::Borrowed(check_label(&self.update_status)),
-                true,
-                check_enabled(&self.update_status),
-            ),
-            #[cfg(feature = "config-gui-integration")]
-            TrayAction::OpenConfigGui => (Cow::Borrowed("Settings"), true, true),
-            TrayAction::Exit => (Cow::Borrowed("Exit"), true, true),
         };
         MenuEntry {
-            action,
+            entry,
             label,
             visible,
             enabled,
@@ -245,7 +259,7 @@ mod tests {
     fn menu_entry(state: &TrayState, action: TrayAction) -> MenuEntry {
         state
             .menu_entries()
-            .find(|entry| entry.action == action)
+            .find(|entry| entry.entry == TrayEntry::Action(action))
             .expect("menu entry")
     }
 
@@ -278,7 +292,7 @@ mod tests {
 
 #[cfg(target_os = "linux")]
 pub(crate) mod platform {
-    use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, TrayChange, TrayState, badged_icon};
+    use super::{APP_NAME, TRAY_ICON_SIZE, TRAY_ID, TrayChange, TrayEntry, TrayState, badged_icon};
     use crate::app::{AppCommand, AppEvent};
     use anyhow::Context;
     use ksni::{
@@ -334,12 +348,17 @@ pub(crate) mod platform {
             self.state
                 .menu_entries()
                 .map(|entry| {
-                    let action = entry.action;
+                    let tray_entry = entry.entry;
                     StandardItem {
                         label: entry.label.into_owned(),
                         visible: entry.visible,
                         enabled: entry.enabled,
-                        activate: Box::new(move |tray: &mut Self| action.send(&tray.command_tx)),
+                        activate: Box::new(move |tray: &mut Self| match tray_entry {
+                            TrayEntry::Action(_) => {
+                                action.send(&tray.command_tx);
+                            }
+                            TrayEntry::Version => {}
+                        }),
                         ..Default::default()
                     }
                     .into()
@@ -388,7 +407,8 @@ pub(crate) mod platform {
 #[cfg(not(target_os = "linux"))]
 pub(crate) mod platform {
     use super::{
-        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, TrayAction, TrayChange, TrayState, badged_icon,
+        APP_NAME, TRAY_ICON_SIZE, TRAY_ID, TrayAction, TrayChange, TrayEntry, TrayState,
+        badged_icon,
     };
     use crate::app::{AppCommand, AppEvent};
     use anyhow::Context;
@@ -569,7 +589,7 @@ pub(crate) mod platform {
     }
 
     struct NativeMenuItem {
-        action: TrayAction,
+        entry: TrayEntry,
         item: MenuItem,
     }
 
@@ -583,7 +603,7 @@ pub(crate) mod platform {
                 items: state
                     .menu_entries()
                     .map(|entry| NativeMenuItem {
-                        action: entry.action,
+                        entry: entry.entry,
                         item: MenuItem::new(entry.label.as_ref(), entry.enabled, None),
                     })
                     .collect(),
@@ -593,14 +613,17 @@ pub(crate) mod platform {
         fn action_ids(&self) -> Vec<(String, TrayAction)> {
             self.items
                 .iter()
-                .map(|entry| (entry.item.id().0.clone(), entry.action))
+                .filter_map(|entry| match entry.entry {
+                    TrayEntry::Action(action) => Some((entry.item.id().0.clone(), action)),
+                    TrayEntry::Version => None,
+                })
                 .collect()
         }
 
         fn sync(&self, menu: &Menu, state: &TrayState) -> anyhow::Result<()> {
             let mut position = 0;
             for (native, entry) in self.items.iter().zip(state.menu_entries()) {
-                debug_assert_eq!(native.action, entry.action);
+                debug_assert_eq!(native.entry, entry.entry);
                 native.item.set_text(entry.label.as_ref());
                 native.item.set_enabled(entry.enabled);
                 sync_menu_item(menu, &native.item, entry.visible, position)?;
